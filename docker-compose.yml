@@ -1,0 +1,18 @@
+services:
+  sandbox:
+    build: {context: ., dockerfile: Dockerfile.sandbox}
+    ports: ["8000:8000"]
+    volumes: ["sandbox-data:/data"]
+  agent:
+    build: {context: ., dockerfile: Dockerfile.agent}
+    ports: ["8001:8001"]
+    volumes: ["agent-data:/data"]
+    depends_on: [sandbox]
+  dashboard:
+    build: {context: ., dockerfile: dashboard/Dockerfile}
+    ports: ["5173:5173"]
+    environment:
+      VITE_AGENT_URL: http://localhost:8001
+      VITE_SANDBOX_URL: http://localhost:8000
+    depends_on: [agent]
+volumes: {sandbox-data: {}, agent-data: {}}
