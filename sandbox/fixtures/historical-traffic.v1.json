@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "synthetic": true,
+  "provenance": "simulated historical traffic",
+  "observation_window": {"start": "2026-01-01T00:00:00Z", "end": "2026-01-02T00:00:00Z"},
+  "endpoints": [
+    {"method": "POST", "path": "/api/v2/quotes", "coverage": "complete", "legitimate_requests_in_window": 12, "last_legitimate_at": "2026-01-01T18:20:00Z"},
+    {"method": "POST", "path": "/api/v2/bookings", "coverage": "complete", "legitimate_requests_in_window": 10, "last_legitimate_at": "2026-01-01T18:22:00Z"},
+    {"method": "GET", "path": "/api/v2/bookings/{id}", "coverage": "complete", "legitimate_requests_in_window": 10, "last_legitimate_at": "2026-01-01T18:23:00Z"},
+    {"method": "GET", "path": "/api/ui/preferences", "coverage": "complete", "legitimate_requests_in_window": 8, "last_legitimate_at": "2026-01-01T18:21:00Z"},
+    {"method": "GET", "path": "/api/v1/bookings/{id}", "coverage": "complete", "legitimate_requests_in_window": 0, "last_legitimate_at": "2025-12-20T10:00:00Z"}
+  ]
+}

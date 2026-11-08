@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0",
+  "synthetic": true,
+  "provenance": "synthetic archived route documentation; candidate for scoped reachability probe, not observed legitimate traffic",
+  "routes": [{"method": "GET", "path": "/api/v1/bookings/{id}"}]
+}

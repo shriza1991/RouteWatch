@@ -1,0 +1,129 @@
+{
+  "schema_version": "1.0",
+  "synthetic": true,
+  "provenance": "Recorded ordinary sandbox HTTP journey; identifiers normalized after response",
+  "format": "routewatch-journey-recording-v1",
+  "label": "synthetic custom journey recording",
+  "observation_window": {
+    "start": "2026-11-08T10:43:05.505152Z",
+    "end": "2026-11-08T10:43:05.560017Z"
+  },
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/api/v2/quotes",
+      "status": 200,
+      "timestamp": "2026-11-08T10:43:05.505152Z",
+      "account_context_id": "agency-a",
+      "source": "synthetic journey recording",
+      "response": {
+        "quote_id": "{quote:agency-a}",
+        "route": "DEL-BOM",
+        "fare": 120.0
+      },
+      "body": {
+        "route": "DEL-BOM"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/bookings",
+      "status": 200,
+      "timestamp": "2026-11-08T10:43:05.518899Z",
+      "account_context_id": "agency-a",
+      "source": "synthetic journey recording",
+      "response": {
+        "booking_id": "{booking:agency-a}",
+        "agency_id": "agency-a",
+        "fare": 120.0,
+        "quote_fare": 120.0
+      },
+      "body": {
+        "quote_id": "{quote:agency-a}",
+        "traveler": "Synthetic traveler",
+        "fare": 120.0
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/bookings/{id}",
+      "status": 200,
+      "timestamp": "2026-11-08T10:43:05.527384Z",
+      "account_context_id": "agency-a",
+      "source": "synthetic journey recording",
+      "response": {
+        "agency_id": "agency-a",
+        "traveler": "Synthetic traveler",
+        "route": "DEL-BOM",
+        "fare": 120.0,
+        "quote_fare": 120.0,
+        "created_at": "2026-11-08T10:43:05.513454+00:00",
+        "booking_id": "{booking:agency-a}"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/quotes",
+      "status": 200,
+      "timestamp": "2026-11-08T10:43:05.537454Z",
+      "account_context_id": "agency-b",
+      "source": "synthetic journey recording",
+      "response": {
+        "quote_id": "{quote:agency-b}",
+        "route": "DEL-BOM",
+        "fare": 120.0
+      },
+      "body": {
+        "route": "DEL-BOM"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/bookings",
+      "status": 200,
+      "timestamp": "2026-11-08T10:43:05.549908Z",
+      "account_context_id": "agency-b",
+      "source": "synthetic journey recording",
+      "response": {
+        "booking_id": "{booking:agency-b}",
+        "agency_id": "agency-b",
+        "fare": 120.0,
+        "quote_fare": 120.0
+      },
+      "body": {
+        "quote_id": "{quote:agency-b}",
+        "traveler": "Synthetic traveler",
+        "fare": 120.0
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/bookings/{id}",
+      "status": 200,
+      "timestamp": "2026-11-08T10:43:05.556931Z",
+      "account_context_id": "agency-b",
+      "source": "synthetic journey recording",
+      "response": {
+        "agency_id": "agency-b",
+        "traveler": "Synthetic traveler",
+        "route": "DEL-BOM",
+        "fare": 120.0,
+        "quote_fare": 120.0,
+        "created_at": "2026-11-08T10:43:05.544120+00:00",
+        "booking_id": "{booking:agency-b}"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/ui/preferences",
+      "status": 200,
+      "timestamp": "2026-11-08T10:43:05.560017Z",
+      "account_context_id": "ui",
+      "source": "synthetic journey recording",
+      "response": {
+        "currency": "INR",
+        "synthetic": true
+      }
+    }
+  ]
+}

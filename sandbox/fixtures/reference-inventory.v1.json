@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "synthetic": true,
+  "provenance": "Supplied demonstration reference inventory; independent of journey recording",
+  "endpoints": [
+    {"method": "POST", "path": "/api/v2/quotes"},
+    {"method": "POST", "path": "/api/v2/bookings"},
+    {"method": "GET", "path": "/api/v2/bookings/{id}"},
+    {"method": "GET", "path": "/api/v1/bookings/{id}"}
+  ]
+}
