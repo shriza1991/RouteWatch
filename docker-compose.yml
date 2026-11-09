@@ -1,18 +1,83 @@
 services:
   sandbox:
     build: {context: ., dockerfile: Dockerfile.sandbox}
-    ports: ["8000:8000"]
+    environment:
+      SANDBOX_DB: /data/sandbox.db
+    ports: ["${ROUTEWATCH_SANDBOX_PORT:-8000}:8000"]
     volumes: ["sandbox-data:/data"]
+    networks: [travel]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/sandbox/status', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  management:
+    build: {context: ., dockerfile: Dockerfile.management}
+    environment:
+      SANDBOX_DB: /data/sandbox.db
+      SANDBOX_MANAGEMENT_TOKEN: ${SANDBOX_MANAGEMENT_TOKEN:?Set SANDBOX_MANAGEMENT_TOKEN before starting Compose}
+    volumes: ["sandbox-data:/data"]
+    networks: [management-private]
+    depends_on:
+      sandbox: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8002), timeout=2).close()"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   agent:
     build: {context: ., dockerfile: Dockerfile.agent}
-    ports: ["8001:8001"]
+    environment:
+      AGENT_DB: /data/agent.db
+    ports: ["${ROUTEWATCH_AGENT_PORT:-8001}:8001"]
     volumes: ["agent-data:/data"]
-    depends_on: [sandbox]
+    networks: [edge, travel]
+    depends_on:
+      sandbox: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/scans', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   dashboard:
     build: {context: ., dockerfile: dashboard/Dockerfile}
-    ports: ["5173:5173"]
+    ports: ["${ROUTEWATCH_DASHBOARD_PORT:-5173}:5173"]
     environment:
-      VITE_AGENT_URL: http://localhost:8001
-      VITE_SANDBOX_URL: http://localhost:8000
-    depends_on: [agent]
-volumes: {sandbox-data: {}, agent-data: {}}
+      VITE_AGENT_URL: http://localhost:${ROUTEWATCH_AGENT_PORT:-8001}
+      VITE_SANDBOX_URL: http://sandbox:8000
+    networks: [edge]
+    depends_on:
+      agent: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5173').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  v1-transport:
+    profiles: [v1]
+    build: {context: ., dockerfile: Dockerfile.v1}
+    environment:
+      VOYAGEGUARD_V1_DB: /data/voyageguard-v1.db
+    ports: ["${ROUTEWATCH_V1_PORT:-8012}:8012"]
+    volumes: ["v1-data:/data"]
+    networks: [edge]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8012/v1/scans', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+networks:
+  edge: {}
+  travel: {}
+  management-private:
+    internal: true
+
+volumes:
+  sandbox-data: {}
+  agent-data: {}
+  v1-data: {}
