@@ -12,6 +12,7 @@ class FixtureInventoryService:
     """InventoryService for the local synthetic sandbox; never performs network probes."""
     def __init__(self, fixture_dir: str | Path = _DEFAULT_FIXTURE_DIR):
         self.fixture_dir = Path(fixture_dir).resolve()
+        self._reachability: dict[tuple[str, str], str] = {}
 
     def _load(self, filename: str) -> dict[str, Any]:
         path = (self.fixture_dir / filename).resolve()
@@ -23,6 +24,13 @@ class FixtureInventoryService:
             raise ValueError("discovery fixture must contain a JSON object")
         return value
 
+    def record_reachability(self, method: str, path: str, outcome: str) -> None:
+        from discovery.inventory import normalize_path
+        normalized_method, normalized_path = normalize_path(method, path)
+        if outcome not in {"reachable", "blocked", "unreachable", "unprobed"}:
+            raise ValueError("invalid reachability outcome")
+        self._reachability[(normalized_method, normalized_path)] = outcome
+
     def list_endpoints(self, target_id: str) -> list[Endpoint]:
         if target_id != "local-sandbox":
             raise ValueError("fixture inventory is only available for local-sandbox")
@@ -31,4 +39,5 @@ class FixtureInventoryService:
             self._load("reference-inventory.v1.json"),
             self._load("historical-traffic.v1.json"),
             self._load("archived-routes.v1.json"),
+            reachability=self._reachability,
         )
