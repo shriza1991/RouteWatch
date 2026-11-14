@@ -17,8 +17,8 @@ Branch: `feat/routewatch-complete-transformation`
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Runtime and persistence unification | In progress — v1 store/transport retained; full legacy/domain orchestration wiring remains |
-| 2 | Discovery and inventory | In progress — normalized route, HAR and JS extraction, evidence-aware fixture inventory implemented; runtime reachability probing not implemented |
-| 3 | Change-aware planning | In progress — deterministic endpoint snapshot diff and test-family prioritization implemented; deployment webhook/CI integration pending |
+| 2 | Discovery and inventory | Partial — normalized route, HAR and JS route-literal extraction, fixture-backed v1 inventory, source evidence and conservative classification implemented; authenticated reachability probes and external capture ingestion pending |
+| 3 | Change-aware planning | Partial — deterministic snapshot comparison and travel-specific test-family prioritization implemented as a library; persisted baselines, deployment webhook/CI integration and scan-trigger wiring pending |
 | 4 | Travel business logic | Pending — existing ownership and fare rules preserved; additional refund/cancellation/role tests pending |
 | 5 | Execution safety and independent verification | Partial — existing SafeExecutor and management adapter preserved; end-to-end v1 verification wiring pending |
 | 6 | Dashboard and demo | Partial — existing dashboard remains intact; v1 inventory integration and browser/E2E verification pending |
