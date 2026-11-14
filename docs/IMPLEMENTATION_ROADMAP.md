@@ -23,6 +23,6 @@ The default scanner refuses non-sandbox targets. All attack scenarios use reposi
 
 ## Verification
 
-GitHub Actions run 24 passed on implementation commit `19f4c2c8db7d9ef48feb655f2f34b71bd52425c2`: Python compile plus full pytest suite (138 passed), dashboard tests, dashboard production build, and Docker Compose configuration validation. The later change to this roadmap is documentation-only. This validates CI on the synthetic demo stack; it does not establish production readiness or cover the explicitly deferred feature families.
+GitHub Actions run 33 passed on implementation commit `1fb96d75465343025db547078b749edcf7f1a051`: Python compile plus full pytest suite (140 passed), dashboard tests, dashboard production build, and Docker Compose configuration validation. The later edits to this roadmap and demo acceptance page are documentation-only. This validates CI on the synthetic demo stack; it does not establish production readiness or cover the explicitly deferred feature families.
 
 The branch adds deterministic domain tests for cross-agency access, persisted fare tampering, retest resolution, scope rejection and kill-switch behavior, plus existing discovery tests. Run the full suite and dashboard build in GitHub Actions before treating the branch as ready. No current test result should be inferred from historical results in `docs/INTEGRATION_STATUS.md`.
