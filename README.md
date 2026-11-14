@@ -7,16 +7,20 @@ The **working legacy demo** runs a synthetic travel sandbox, a rule-driven secur
 Set your own private management token in PowerShell (or an untracked `.env`). The following works in Windows PowerShell as well as PowerShell 7. Compose refuses a missing or blank value. Do not put it in `VITE_*` configuration.
 
 ```powershell
-$bytes = New-Object byte[] 32
-$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-$rng.GetBytes($bytes)
-$rng.Dispose()
-$env:SANDBOX_MANAGEMENT_TOKEN = [BitConverter]::ToString($bytes).Replace('-', '')
+function New-RouteWatchSecret {
+  $bytes = New-Object byte[] 32
+  $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+  $rng.GetBytes($bytes)
+  $rng.Dispose()
+  return [Convert]::ToBase64String($bytes)
+}
+$env:SANDBOX_MANAGEMENT_TOKEN = New-RouteWatchSecret
+$env:VOYAGEGUARD_REVIEWER_TOKEN = New-RouteWatchSecret
 docker compose up --build -d
 docker compose ps
 ```
 
-Open <http://localhost:5173>. Travel status is at <http://localhost:8000/sandbox/status>; the legacy agent is at <http://localhost:8001/scans>. Compose sets the dashboard's target origin to `http://sandbox:8000`, which the agent container can reach. The browser sends this origin to the agent; it does not make direct travel API calls. Management listens on port 8002 **inside its own container only**, with no published host port.
+Open <http://localhost:5173>. Travel status is at <http://localhost:8000/sandbox/status>; the legacy agent is at <http://localhost:8001/scans>. Compose sets the dashboard's target origin to `http://sandbox:8000`, which the agent container can reach. The browser sends this origin to the agent; it does not make direct travel API calls. Management listens on port 8002 **inside its own container only**, with no published host port. The v1 transport joins the isolated management network so only the server-side runtime can invoke predefined controls. The dashboard now uses the v1 API by default; reviewer approval requires the private `VOYAGEGUARD_REVIEWER_TOKEN` supplied interactively in the dashboard and checked by the server. The reviewer token is held only in the page's in-memory state and is never part of a Vite environment variable.
 
 Management shares `/data/sandbox.db` with travel. It binds `0.0.0.0` inside its container so `docker compose exec` can use its local loopback socket; native startup binds `127.0.0.1`. Its private Compose network has no dashboard or agent membership. This is not complete isolation from privileged containers or host administrators.
 
@@ -31,14 +35,7 @@ docker compose exec -T management python scripts/management_request.py action di
 docker compose exec -T management python scripts/management_request.py mode fixed
 ```
 
-Start the incomplete v1 polling API only when needed:
-
-```powershell
-docker compose --profile v1 up --build -d
-Invoke-RestMethod http://localhost:8012/v1/scans
-```
-
-It uses its own `/data/voyageguard-v1.db` volume. The v1 inventory endpoint is now backed by the repository's four independent synthetic discovery fixtures for `target_id=local-sandbox`; it does not probe the network and leaves zombie candidates unclassified until reachability is established. Scan and remediation lifecycle commands still require domain services and return an honest 503 until those services are wired. The default dashboard and legacy agent are unchanged. See [v1 transport](docs/TRANSPORT.md) and the [transformation roadmap](docs/IMPLEMENTATION_ROADMAP.md).
+The default stack starts the v1 API on port 8012 with its own `/data/voyageguard-v1.db` volume. The v1 runtime discovers from the four supplied synthetic fixtures, performs bounded ownership and fare checks against the local sandbox, persists evidence and change events, and supports approval-gated predefined remediation followed by independent retesting. The legacy agent remains available on port 8001 for comparison, but the dashboard defaults to v1. See [v1 transport](docs/TRANSPORT.md), the [demo guide](docs/DEMO.md) and the [transformation roadmap](docs/IMPLEMENTATION_ROADMAP.md).
 
 ## Demo and reset
 
@@ -82,6 +79,7 @@ For native operator calls, set the same token privately in the operator shell an
 ```powershell
 python -m pytest -q
 docker compose config -q
+cd dashboard; npm test; npm run build
 ```
 
 The legacy agent has its own SQLite schema and rule-driven scan. V1 persistence, approval policy, eligibility and retest outcomes are separate and not wired into it. See [DEMO.md](DEMO.md), [TEAM.md](TEAM.md) and [ownership](docs/OWNERSHIP.md).
