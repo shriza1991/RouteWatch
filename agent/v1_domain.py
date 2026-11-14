@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import re
 import time
+import threading
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import unquote, urlsplit
@@ -28,6 +29,7 @@ from transport.management_adapter import SandboxManagementAdapter
 
 _METHODS = {"GET", "POST"}
 MAX_RESPONSE_BYTES = 256 * 1024
+_HOST_REQUEST_SLOTS = threading.BoundedSemaphore(2)
 SENSITIVE_FIELDS = ("token", "authorization", "password", "cookie", "secret", "credential")
 
 
@@ -143,6 +145,10 @@ class RouteWatchDomainService:
         decoded_path = unquote(parsed_path.path)
         if parsed_path.scheme or parsed_path.netloc or parsed_path.fragment or "\\" in decoded_path:
             raise ScopeViolation("Unsafe path rejected")
+        if decoded_path != "/ui/traffic-recording" and not decoded_path.startswith("/api/"):
+            raise ScopeViolation("Only the synthetic journey and API routes are in scope")
+        if len(decoded_path) > 512:
+            raise ScopeViolation("Request path exceeds the local demo limit")
         if any(segment in {".", ".."} for segment in decoded_path.split("/")):
             raise ScopeViolation("Path traversal rejected")
         if os.getenv("ROUTEWATCH_KILL_SWITCH", "").strip().lower() in {"1", "true", "yes", "on"}:
@@ -172,27 +178,34 @@ class RouteWatchDomainService:
         outcome = "transport_error"
         data: Any = None
         try:
-            with client.stream(normalized_method, url, headers=headers, json=body) as response:
-                status = response.status_code
-                chunks: list[bytes] = []
-                total = 0
-                for chunk in response.iter_bytes():
-                    total += len(chunk)
-                    if total > MAX_RESPONSE_BYTES:
-                        outcome = "response_size_limit"
-                        data = {"_truncated": True}
-                        break
-                    chunks.append(chunk)
-                if outcome != "response_size_limit":
-                    raw = b"".join(chunks)
-                    if not raw:
-                        data = {}
-                    else:
-                        try:
-                            data = __import__("json").loads(raw)
-                        except (ValueError, UnicodeDecodeError):
-                            data = {"text": raw[:500].decode("utf-8", errors="replace")}
-                    outcome = "redirect_rejected" if 300 <= status < 400 else "completed"
+            acquired = _HOST_REQUEST_SLOTS.acquire(timeout=target.timeout_seconds)
+            if not acquired:
+                outcome = "host_concurrency_limit"
+                raise ScanStopped("Per-host concurrent request limit reached")
+            try:
+                with client.stream(normalized_method, url, headers=headers, json=body) as response:
+                    status = response.status_code
+                    chunks: list[bytes] = []
+                    total = 0
+                    for chunk in response.iter_bytes():
+                        total += len(chunk)
+                        if total > MAX_RESPONSE_BYTES:
+                            outcome = "response_size_limit"
+                            data = {"_truncated": True}
+                            break
+                        chunks.append(chunk)
+                    if outcome != "response_size_limit":
+                        raw = b"".join(chunks)
+                        if not raw:
+                            data = {}
+                        else:
+                            try:
+                                data = __import__("json").loads(raw)
+                            except (ValueError, UnicodeDecodeError):
+                                data = {"text": raw[:500].decode("utf-8", errors="replace")}
+                        outcome = "redirect_rejected" if 300 <= status < 400 else "completed"
+            finally:
+                _HOST_REQUEST_SLOTS.release()
         except httpx.RequestError:
             outcome = "transport_error"
             raise
@@ -357,8 +370,12 @@ class RouteWatchDomainService:
                     path=archived_path.replace("{id}", booking_a["booking_id"]), account=a,
                     purpose="scoped_archived_route_reachability", budget=budget,
                 )
+                # 404 is ambiguous: it can be the framework's generic not-found
+                # response. 410 (the sandbox's retired-route response), auth
+                # denials, method rejection and successful responses prove routing.
                 reachability[("GET", archived_path)] = (
-                    "reachable" if 100 <= archived_status < 500 else "unreachable"
+                    "reachable" if archived_status in {200, 201, 204, 401, 403, 405, 410}
+                    else "unreachable"
                 )
 
             if hasattr(self.inventory, "record_reachability"):
