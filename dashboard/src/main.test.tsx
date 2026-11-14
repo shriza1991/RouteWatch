@@ -93,7 +93,7 @@ describe('v1 approval and retest flow', () => {
     Object.values(mocks.api).forEach(mock => mock.mockReset());
     mocks.api.scans.mockResolvedValue([scanFixture('completed')]); mocks.api.scanEvents.mockResolvedValue(['scan completed']);
     mocks.api.findings.mockResolvedValue([findingFixture]); mocks.api.inventory.mockResolvedValue([endpointFixture]);
-    mocks.api.audit.mockResolvedValue([]); mocks.api.retests.mockResolvedValue([]);
+    mocks.api.audit.mockResolvedValue([]); mocks.api.changes.mockResolvedValue([]); mocks.api.retests.mockResolvedValue([]);
     mocks.api.proposals.mockResolvedValue([]); mocks.api.approvals.mockResolvedValue([]); mocks.api.executions.mockResolvedValue([]);
     mocks.api.propose.mockResolvedValue(proposalFixture); mocks.api.approve.mockResolvedValue(approvalFixture); mocks.api.execute.mockResolvedValue(executionFixture);
     mocks.api.retest.mockResolvedValue(retestFixtures[0]);
@@ -110,11 +110,12 @@ describe('v1 approval and retest flow', () => {
     await mount();
     fireEvent.click(await screen.findByRole('button', { name: 'Create remediation proposal' }));
     await waitFor(() => expect(mocks.api.propose).toHaveBeenCalledWith(findingFixture.id));
+    fireEvent.change(await screen.findByLabelText('Reviewer token'), { target: { value: 'reviewer-test-token' } });
     fireEvent.click(await screen.findByRole('button', { name: 'Review proposal decision' }));
-    expect(await screen.findByText(/does not authenticate a human reviewer/)).toBeInTheDocument();
+    expect(await screen.findByText(/shared local-demo credential, not enterprise identity management/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Execute approved action' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Confirm approval' }));
-    await waitFor(() => expect(mocks.api.approve).toHaveBeenCalledWith(proposalFixture.id, 'approved'));
+    await waitFor(() => expect(mocks.api.approve).toHaveBeenCalledWith(proposalFixture.id, 'approved', 'reviewer-test-token'));
     fireEvent.click(await screen.findByRole('button', { name: 'Execute approved action' }));
     await waitFor(() => expect(mocks.api.execute).toHaveBeenCalledWith(proposalFixture.id));
     expect(await screen.findByText('indeterminate')).toBeInTheDocument();
