@@ -19,13 +19,14 @@ class ManagementConfig:
 
     def __post_init__(self):
         parsed = urlsplit(self.origin)
-        if (parsed.scheme not in ('http', 'https') or not parsed.hostname or
+        if (parsed.scheme != 'http' or not parsed.hostname or
+                parsed.hostname.lower() not in ('localhost', '127.0.0.1', '::1', 'management') or
                 parsed.username is not None or parsed.password is not None or
-                parsed.path not in ('', '/') or parsed.query or parsed.fragment or
-                (parsed.scheme == 'http' and parsed.hostname not in ('localhost', '127.0.0.1', '::1'))):
+                parsed.path not in ('', '/') or parsed.query or parsed.fragment):
             raise ValueError('Invalid sandbox management origin')
         try:
-            parsed.port
+            if parsed.port != 8002:
+                raise ValueError('Invalid sandbox management origin')
         except ValueError:
             raise ValueError('Invalid sandbox management origin') from None
         if not isinstance(self.token, str) or not self.token.strip():
@@ -68,7 +69,7 @@ class SandboxManagementAdapter:
         payload = {'action_key': proposal.action_key.value, 'idempotency_key': key}
         headers = {'Authorization': f'Bearer {self._config.token}'}
         owned_client = self._client is None
-        client = self._client or httpx.Client(timeout=self._config.timeout_seconds, follow_redirects=False)
+        client = self._client or httpx.Client(timeout=self._config.timeout_seconds, follow_redirects=False, trust_env=False)
         try:
             response = client.post(self._config.origin + '/management/actions',
                                    json=payload, headers=headers,

@@ -1,57 +1,83 @@
-# V1 transport (separate, incomplete runtime)
+# V1 runtime and API
 
-Run from the repository root with `VOYAGEGUARD_V1_DB` pointing to a **separate** SQLite file:
+The integrated local demo runs the v1 FastAPI transport, a bounded domain service, fixture-backed inventory, SQLite persistence, the existing synthetic travel sandbox, and the separate management service. The legacy agent remains available for comparison; the dashboard defaults to v1 in Docker Compose.
+
+## Run
+
+From PowerShell, create per-session secrets and start the default stack:
 
 ```powershell
-$env:VOYAGEGUARD_V1_DB = 'C:\Users\dyara\RouteWatch\data\voyageguard-v1.db'
-python -m uvicorn transport.api:app --host 127.0.0.1 --port 8012
+function New-RouteWatchSecret {
+  $bytes = New-Object byte[] 32
+  $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+  $rng.GetBytes($bytes)
+  $rng.Dispose()
+  return [Convert]::ToBase64String($bytes)
+}
+$env:SANDBOX_MANAGEMENT_TOKEN = New-RouteWatchSecret
+$env:VOYAGEGUARD_REVIEWER_TOKEN = New-RouteWatchSecret
+docker compose up --build -d
 ```
 
-This starts the polling API and durable store. The same default app can run with `docker compose --profile v1 up --build -d` on host port 8012, using its own persistent volume. It has **no domain, discovery or management capability**; commands and `/v1/inventory` return `503 {"code":"capability_unavailable","message":"... capability unavailable"}`. It does not fabricate scans, findings or inventory. The legacy agent/dashboard entrypoints remain unchanged.
+Open `http://localhost:5173`. The dashboard calls the v1 transport through its Vite `/v1-api` proxy. The v1 API is also published on host port 8012. The management API is not published and is reachable only from the private Compose network. The reviewer token is server-side configuration and must be entered in the dashboard to approve a proposal; it is held in page memory and sent only in the approval request header.
 
-## Factory and owner interfaces
+The v1 runner accepts only `target_id=local-sandbox`, the configured sandbox host allowlist, HTTP port 8000, and the two server-side synthetic credential references. It rejects arbitrary internet targets. This is a controlled demo integration, not a general-purpose production DAST deployment.
 
-`create_app(*, store: V1Store, credential_resolver: CredentialResolver | None, domain: DomainService | None, inventory: InventoryService | None, management_adapter: SandboxManagementAdapter | None, reviewer_id='local-demo-reviewer') -> FastAPI` is in `transport.api`. `CredentialResolver.has_reference(reference) -> bool` checks a server-side reference without returning a token to the browser. `DomainService` must implement `start_scan(target, credentials)->ScanRun`, `cancel_scan(scan)->ScanRun`, `propose(finding)->RemediationProposal`, `approve(proposal, reviewer_id, decision)->Approval`, `execute(proposal, approval, attempt_id, adapter)->ExecutionResult`, and `retest(finding)->RetestResult`. `InventoryService.list_endpoints(target_id)->list[Endpoint]` supplies Akshat's results. See the Protocol definitions for exact annotations. Test doubles are in `tests/integration/test_transport.py` only.
+## Implemented API
 
-The local-demo reviewer ID is set by the server factory, not accepted as `approved_by` from a browser. This is a demonstration context, not authenticated reviewer identity or enterprise access control. Ram must implement authoritative reviewer policy and eligibility checks. Transport loads the persisted proposal and approval and passes them to `DomainService.execute`; it does **not** call the management adapter directly. Missing/rejected approval returns 409 before domain/adapter execution. A previous `indeterminate` execution blocks a new execution key pending reconciliation; identical completed request retries replay the original response.
+All mutation routes require an `Idempotency-Key`. Errors use a sanitized `{code,message}` body.
 
-## Implemented routes
+| Method | Route | Purpose |
+|---|---|---|
+| POST | `/v1/scans` | Queue and run a bounded synthetic scan |
+| GET | `/v1/scans` | List persisted scans |
+| GET | `/v1/scans/{id}` | Read scan state |
+| GET | `/v1/scans/{id}/events` | Read persisted scan events |
+| POST | `/v1/scans/{id}/cancel` | Request cancellation |
+| GET | `/v1/findings` | List persisted findings |
+| GET | `/v1/findings/{id}` | Read a finding |
+| GET | `/v1/inventory?target_id=local-sandbox` | Read latest inventory snapshot or fixture baseline |
+| GET | `/v1/changes` | Read persisted snapshot-difference events |
+| POST | `/v1/findings/{id}/proposals` | Create a predefined remediation proposal |
+| GET | `/v1/proposals` | List proposals |
+| POST | `/v1/proposals/{id}/approval` | Record an approval/rejection after reviewer-token validation |
+| GET | `/v1/approvals` | List approval records |
+| POST | `/v1/proposals/{id}/execute` | Execute an approved predefined sandbox action |
+| GET | `/v1/executions` | List execution results |
+| POST | `/v1/findings/{id}/retest` | Independently replay supported finding proof and legitimate controls |
+| GET | `/v1/retests` | List retest results |
+| GET | `/v1/audit` | Read sanitized request audit events |
 
-All routes are under `/v1`; mutations require `Idempotency-Key` and return v1 Pydantic models. Errors are sanitized `{code,message}`. Invalid request bodies return 422; missing records return 404; key conflicts and pending/reconciliation cases return 409.
+## Runtime behavior
 
-| Method/path | Source or command |
-|---|---|
-| `POST /scans` | body `{"target":<v1 TargetConfig>}`; domain starts scan |
-| `GET /scans?target_id=...`, `GET /scans/{id}`, `GET /scans/{id}/events` | durable polling |
-| `POST /scans/{id}/cancel` | domain cancellation decision |
-| `GET /findings?scan_id=...`, `GET /findings/{id}` | durable findings |
-| `GET /inventory?target_id=...` | injected Akshat inventory interface |
-| `POST /findings/{id}/proposals`, `GET /proposals?finding_id=...` | domain proposal, durable list |
-| `POST /proposals/{id}/approval` | body `{"decision":"approved"}` or `rejected`; domain policy, server reviewer context |
-| `GET /approvals?proposal_id=...` | durable approval |
-| `POST /proposals/{id}/execute`, `GET /executions?proposal_id=...` | domain eligibility and adapter, durable outcome |
-| `POST /findings/{id}/retest`, `GET /retests?finding_id=...` | domain retest decision and durable outcome |
-| `GET /audit?scan_id=...` | durable redacted request audit |
+- Scan requests are persisted before background execution. The runner records events, request audit, findings, an inventory snapshot, and change events.
+- The initial supported business-logic checks are cross-agency booking access and persisted fare tampering. Both use synthetic Agency A/B accounts and a legitimate control.
+- The scanner permits only GET and POST, caps each scan at 30 requests, caps the configured per-minute rate at 30, caps response bodies at 256 KiB, uses bounded HTTP timeouts/connections, disables redirects and honors a global kill switch.
+- Inventory is built from the repository's synthetic journey, reference, historical-traffic and archived-route fixtures. HAR parsing and JavaScript route-literal extraction are reusable library functions; external ingestion and general browser crawling are not wired into this demo.
+- Active means observed journey traffic; shadow means observed in traffic but absent from the reference inventory; zombie requires complete zero-traffic history and an explicit reachable result. Incomplete history remains unknown.
+- Change events compare persisted inventory snapshots and recommend deterministic travel test families. No deployment webhook or CI/CD event subscription is implemented yet.
+- Remediation is limited to predefined sandbox actions. Reviewer-token validation is a local shared-secret demo gate, not enterprise SSO or per-user identity.
+- Retests independently replay the supported original scenario and a legitimate workflow. A finding is resolved only when both checks pass; unsupported scenarios remain inconclusive.
 
-Example scan request uses credential references only:
+## Persistence and failure semantics
 
-```json
-{"target":{"id":"local-sandbox","base_url":"http://127.0.0.1:8000","allowed_origins":["http://127.0.0.1:8000"],"accounts":[{"id":"agency-a","agency_id":"agency-a","user_id":"a","credential_ref":"server:agency-a"},{"id":"agency-b","agency_id":"agency-b","user_id":"b","credential_ref":"server:agency-b"}],"max_requests":30,"timeout_seconds":3}}
+The v1 database is separate from the legacy agent database. Migrations are versioned and SQLite foreign keys are enabled. Mutations reserve an idempotency tuple and canonical request fingerprint before invoking domain logic. Identical completed requests replay their result; conflicting or pending requests are rejected. An indeterminate or pending management execution must be reconciled before another attempt. There is no claim of exactly-once behavior across SQLite and the management HTTP service.
+
+The management adapter and its credential are injected server-side only. Browser payloads, v1 contracts, findings and request audit do not contain management credentials. Sandbox actions are limited to predefined control keys; do not add arbitrary command execution.
+
+## Tests and limitations
+
+Run:
+
+```powershell
+python -m pytest -q
+docker compose config -q
+cd dashboard
+npm ci
+npm test
+npm run build
 ```
 
-Only server-side injection can provide a resolver or management adapter; management URL/token are not request fields, stored v1 payloads, or ordinary executor configuration. The API contains no management-control route. Polling lists use the v1 store's deterministic order and parent filters.
+The new v1 domain tests use a deterministic in-memory HTTP transport and a temporary SQLite database. CI runs the Python suite, dashboard tests/build, and Compose configuration validation. A successful CI run is the evidence to cite for the current branch; historical results in `docs/INTEGRATION_STATUS.md` describe a prior revision.
 
-## Idempotency and crash window
-
-Each mutation reserves `(operation,resource,Idempotency-Key)` with a canonical request fingerprint. Completed identical requests replay the persisted model; conflicting payloads return 409. An existing pending reservation returns 409 and does not invoke the domain again. For an execution, the attempt UUID is derived from proposal ID and HTTP key and passed to Ram's explicit `execute` interface; it is distinct from the HTTP key. An `indeterminate` result is stored as supplied and never changes the finding to resolved.
-
-The reservation commits before a domain call. A crash after an external management HTTP request and before result persistence leaves `pending`; both the same key and a new key are blocked for execution. Transport cannot establish whether the action ran. Ram/Sujal must reconcile against sandbox state/idempotency before retry. Sandbox reset/manual mode changes clear its idempotency history. No exactly-once cross-service guarantee is claimed.
-
-## Remaining handoffs
-
-- **Ram:** implement the `DomainService` protocol, authoritative approval/transition/eligibility checks, scan/retest orchestration and safe credential use. The test double is not a runtime service.
-- **Akshat:** implement `InventoryService` from the separate journey, reference, historical and archived-route evidence. The transport does no classification.
-- **Vikram:** switch to these polling models only when the domain and inventory capabilities are integrated; render `503`, `pending_reconciliation` and `indeterminate` explicitly. Do not call management directly.
-- **Sujal:** inject real services, configure server-only credential references and management adapter, migrate or deliberately discard legacy runtime data, and add an authenticated reviewer mechanism before anything beyond the local demo. Compose now provides only the separate opt-in process and database; it does not supply missing domain implementations. Existing agent tables are untouched.
-
-Verified on 2026-11-08: `python -m pytest tests/integration/test_transport.py -q` (6 passed) and `python -m pytest -q` (94 passed; two existing FastAPI deprecation warnings).
+Not implemented in this branch: generic browser crawler and gateway-log ingestion, deployment webhook triggers, dynamic LLM planning, broad injection/SSRF/file-upload testing, refund/duplicate-refund/cancellation/payment/coupon/sub-agent/supplier test cases, production-grade identity/SSO, distributed workers, or a production DAST authorization policy. Do not represent these as complete.

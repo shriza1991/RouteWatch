@@ -1,25 +1,28 @@
-# Demo and acceptance
+# Demo acceptance
 
-## 3–5 minute script (proposed final flow)
+The authoritative current walkthrough and acceptance matrix are maintained in [DEMO.md](DEMO.md).
 
-1. Reset Shriraj’s sandbox to known vulnerable synthetic state. Show management interface is separate and not scanner-discoverable.
-2. Run normal A/B journeys; import the redacted capture and show synthetic timestamped historical window.
-3. Start scan. Show actual discovery, scope/budget audit, active/zombie/shadow evidence, cross-agency returned agency identity, and mismatched quote/booking fare.
-4. Create the predefined ownership proposal; reviewer approves it in the dashboard; execute through the server-side management adapter. Show `remediating`, then independent ordinary-API retest.
-5. Show foreign access blocked and own booking access successful. Repeat for fare: tamper corrected/rejected and normal booking succeeds. Only then show resolved.
-6. Disable/restrict retired endpoint; document shadow endpoint via reference update. Explain the latter is inventory reconciliation, not a fixed security issue. Reset.
+## Current v1 demonstration
 
-## Required acceptance checks
+1. Start the default Docker Compose stack with distinct generated values for `SANDBOX_MANAGEMENT_TOKEN` and `VOYAGEGUARD_REVIEWER_TOKEN`.
+2. Reset only the bundled synthetic sandbox to vulnerable mode using the private management service.
+3. Open the dashboard and start a scan against `http://sandbox:8000`.
+4. Inspect persisted scan events, request audit, fixture-backed endpoint inventory and findings.
+5. Verify the cross-agency proof: Agency A can read its own synthetic booking, but the vulnerable behavior discloses Agency B's booking.
+6. Verify fare tampering using a subsequent persisted booking read, not only the immediate response.
+7. Create a predefined proposal, approve it with the reviewer token, execute the server-side management action, and independently retest.
+8. Show exploit and legitimate-flow outcomes separately. Only both passing permits a `resolved` result.
 
-| Check | Required evidence | Current status |
-|---|---|---|
-| Both vulnerabilities in vulnerable mode | real redacted proof and control | partly implemented; approval flow missing |
-| Neither falsely reported fixed | fresh scan/retest with legitimate control | partly implemented; lifecycle missing |
-| Inventory labels | traffic/reference/history/reachability evidence | partly implemented; labels cannot coexist |
-| Unsupported/failed remediation unresolved | visible terminal state | proposed |
-| Cancel/scope/budget | audit and cancelled run | partial current implementation |
-| Restart persistence | agent restart retains scan/finding/audit | proposed E2E test |
-| No secrets displayed | fixture/audit/dashboard checks | proposed test |
-| Independent fixture work | each role’s fixture command | proposed |
+## Verified CI acceptance
 
-Do not claim proposed tests were executed. Existing tests only cover sandbox vulnerable/fixed behavior; current dashboard/agent behavior must be reverified once refactored.
+GitHub Actions run 33 passed on implementation commit `1fb96d75465343025db547078b749edcf7f1a051`:
+- Python compile and test suite: 140 passed.
+- Dashboard component tests: passed.
+- Dashboard production build: passed.
+- Docker Compose configuration validation: passed.
+
+## Boundaries
+
+The v1 scanner currently verifies cross-agency booking access and persisted fare tampering in the synthetic sandbox. Change intelligence compares persisted inventory snapshots; live deployment hooks and automatic targeted dispatch are not implemented. Duplicate refunds, cancellation abuse, payment bypass, coupon reuse, role escalation and supplier-boundary tests remain outstanding. Browser E2E and production identity/SSO are also outstanding.
+
+Never use production targets, real TBO services, customer records or real financial operations in this demo.
