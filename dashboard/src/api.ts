@@ -12,7 +12,8 @@ export type AuditEvent = { id: string | number; scan_id: string; method: string;
 export type Retest = { id: string; finding_id: string; scan_id: string; passed: boolean; detail: string; legitimate: boolean; created: string; exploitOutcome?: string; legitimateOutcome?: string; outcome?: string };
 export type Proposal = { id: string; finding_id: string; action_key: string; description: string; state: string };
 export type Approval = { id: string; proposal_id: string; approved_by: string; at: string; decision: 'approved' | 'rejected'; reason?: string };
-export type Execution = { id: string; proposal_id: string; action_key: string; state: string; requested_at: string; detail?: string };\nexport type Change = { id: string; scan_id: string; target_id: string; at: string; method: string; normalized_path: string; change: string; risk_score: number; reasons: string[]; recommended_test_families: string[] };
+export type Execution = { id: string; proposal_id: string; action_key: string; state: string; requested_at: string; detail?: string };
+export type Change = { id: string; scan_id: string; target_id: string; at: string; method: string; normalized_path: string; change: string; risk_score: number; reasons: string[]; recommended_test_families: string[] };
 
 export class ApiError extends Error {
   constructor(message: string, readonly status?: number, readonly code?: string) { super(message); this.name = 'ApiError'; }
