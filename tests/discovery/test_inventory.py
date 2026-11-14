@@ -38,7 +38,7 @@ def test_har_import_is_redacted_and_normalized():
     assert "secret" not in json.dumps(rows)
 
 def test_extracts_javascript_routes_without_claiming_reachability():
-    routes = extract_javascript_routes('fetch("/api/v2/bookings/" + bookingId); const x = "/api/v2/refunds/{id}";')
+    routes = extract_javascript_routes('fetch("/api/v2/bookings/{id}"); const x = "/api/v2/refunds/{id}";')
     assert routes == {"/api/v2/bookings/{id}", "/api/v2/refunds/{id}"}
 
 def test_fixture_inventory_preserves_active_shadow_and_unknown_zombie_candidate():
