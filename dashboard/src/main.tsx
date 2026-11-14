@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './style.css';
-import { api, apiMode, type Approval, type AuditEvent, type Endpoint, type Execution, type Finding, type Proposal, type Retest, type Scan } from './api';
+import { api, apiMode, type Approval, type AuditEvent, type Change, type Endpoint, type Execution, type Finding, type Proposal, type Retest, type Scan } from './api';
 
 const defaultBase = import.meta.env.VITE_SANDBOX_URL || 'http://localhost:8000';
 export function App() {
@@ -11,7 +11,7 @@ export function App() {
   const [retests, setRetests] = useState<Retest[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [approvals, setApprovals] = useState<Approval[]>([]);
-  const [executions, setExecutions] = useState<Execution[]>([]);
+  const [executions, setExecutions] = useState<Execution[]>([]);\n  const [changes, setChanges] = useState<Change[]>([]);\n  const [reviewerToken, setReviewerToken] = useState('');
   const [base, setBase] = useState(defaultBase);
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(true);
@@ -24,7 +24,7 @@ export function App() {
 
   const load = useCallback(async (initial = false) => {
     if (initial) setLoading(true);
-    const [scanResult, findingResult, auditResult, retestResult, proposalResult, approvalResult, executionResult] = await Promise.allSettled([api.scans(), api.findings(), api.audit(), api.retests(), api.proposals(), api.approvals(), api.executions()]);
+    const [scanResult, findingResult, auditResult, retestResult, proposalResult, approvalResult, executionResult, changeResult] = await Promise.allSettled([api.scans(), api.findings(), api.audit(), api.retests(), api.proposals(), api.approvals(), api.executions(), api.changes()]);
     const messages: string[] = [];
     if (scanResult.status === 'fulfilled') setScans(scanResult.value); else messages.push(`Scans: ${scanResult.reason.message}`);
     if (findingResult.status === 'fulfilled') setFindings(findingResult.value); else messages.push(`Findings: ${findingResult.reason.message}`);
@@ -32,7 +32,7 @@ export function App() {
     if (retestResult.status === 'fulfilled') setRetests(retestResult.value); else messages.push(`Retests: ${retestResult.reason.message}`);
     if (proposalResult.status === 'fulfilled') setProposals(proposalResult.value); else if (apiMode === 'v1') messages.push(`Proposals: ${proposalResult.reason.message}`);
     if (approvalResult.status === 'fulfilled') setApprovals(approvalResult.value); else if (apiMode === 'v1') messages.push(`Approvals: ${approvalResult.reason.message}`);
-    if (executionResult.status === 'fulfilled') setExecutions(executionResult.value); else if (apiMode === 'v1') messages.push(`Executions: ${executionResult.reason.message}`);
+    if (executionResult.status === 'fulfilled') setExecutions(executionResult.value); else if (apiMode === 'v1') messages.push(`Executions: ${executionResult.reason.message}`);\n    if (changeResult.status === 'fulfilled') setChanges(changeResult.value); else if (apiMode === 'v1') messages.push(`Changes: ${changeResult.reason.message}`);
     if (scanResult.status === 'fulfilled' && retestResult.status === 'fulfilled') {
       const terminal = new Set(scanResult.value.filter(scan => !['running', 'queued', 'cancelling'].includes(scan.status)).map(scan => scan.id));
       const finished = Object.entries(retestScanIds).filter(([findingId, scanId]) => terminal.has(scanId) || retestResult.value.some(row => row.finding_id === findingId)).map(([findingId]) => findingId);
@@ -101,6 +101,8 @@ export function App() {
       <div className="panel-heading"><div><div className="eyebrow">SCAN CONTROL</div><h2>Run a scoped sandbox scan</h2></div><span className="tag">30 request budget · 3s timeout</span></div>
       <div className="run-row"><label htmlFor="target-origin">Sandbox origin<input id="target-origin" value={base} onChange={event => setBase(event.target.value)} aria-describedby="target-help" /></label><button disabled={loading || busy || !connected || scanActive} onClick={() => void launch()}>Start scan</button>{apiMode === 'legacy' && <button disabled={loading || busy || !connected || scanActive} className="button-secondary" onClick={() => void launch(true)}>Simulate deployment + scan</button>}{latest && ['running', 'queued'].includes(latest.status) && <button className="button-danger" disabled={pendingActions.includes(`cancel:${latest.id}`)} onClick={() => void act(`cancel:${latest.id}`, () => api.cancel(latest.id))}>Stop scan</button>}</div>
       <p id="target-help" className="help">{apiMode === 'v1' ? 'Only server-side credential references are sent. The browser never handles account tokens or management credentials.' : 'The legacy demo uses synthetic account values and traffic. This API has no proposal or approval workflow.'}</p>
+      {apiMode === 'v1' && <label className="reviewer-token-field" htmlFor="reviewer-token">Reviewer token<input id="reviewer-token" type="password" autoComplete="off" value={reviewerToken} onChange={event => setReviewerToken(event.target.value)} placeholder="Enter the local reviewer token to approve a fix" /></label>}
+      {apiMode === 'v1' && <p className="help">The token is kept only in this page's memory and is sent only with an approval decision. It is never stored in browser storage.</p>}
       {busy && <p className="inline-status" role="status">Submitting scan request…</p>}
     </section>
 
@@ -122,8 +124,13 @@ export function App() {
     </section>
 
     <section className="section-block">
+      <SectionTitle eyebrow="CHANGE INTELLIGENCE" title="Deployment and endpoint changes" trailing={`${changes.length} recorded changes`} />
+      {apiMode === 'legacy' ? <div className="panel"><Empty title="Change intelligence available in v1" copy="Switch to the integrated v1 runtime to view persisted endpoint changes and selected test families." /></div> : changes.length === 0 ? <div className="panel"><Empty title="No endpoint changes recorded" copy="The first inventory snapshot establishes the baseline. New endpoints and material metadata changes are prioritised on subsequent scans." /></div> : <div className="panel table-panel"><div className="table-wrap"><table><thead><tr><th>Risk</th><th>Change</th><th>Endpoint</th><th>Reasons and recommended tests</th><th>Recorded</th></tr></thead><tbody>{changes.map(change => <tr key={change.id}><td><span className={`severity-chip ${change.risk_score >= 80 ? 'high' : change.risk_score >= 50 ? 'medium' : 'low'}`}>{change.risk_score}/100</span></td><td>{change.change.replace(/_/g, ' ')}</td><td className="mono path-cell">{change.method} {change.normalized_path}</td><td>{[...change.reasons, ...change.recommended_test_families.map(name => `Test: ${name.replace(/_/g, ' ')}`)].join(' · ')}</td><td>{new Date(change.at).toLocaleString()}</td></tr>)}</tbody></table></div></div>}
+    </section>
+
+    <section className="section-block">
       <SectionTitle eyebrow="FINDINGS" title="Security findings" trailing={`${findings.length} recorded`} />
-      {loading && findings.length === 0 ? <div className="panel"><Empty title="Loading findings" copy="Checking persisted scan results." /></div> : findings.length === 0 ? <div className="panel"><Empty title="No confirmed findings" copy="Findings will appear here when a scan reproduces a security issue." /></div> : <div className="finding-list">{findings.map(finding => <FindingCard key={finding.id} mode={apiMode} finding={finding} retests={retests.filter(row => row.finding_id === finding.id)} proposal={proposals.find(row => row.finding_id === finding.id)} proposals={proposals.filter(row => row.finding_id === finding.id)} approvals={approvals} executions={executions} pending={pendingRetests.includes(finding.id) || pendingActions.some(key => key.endsWith(finding.id))} onRetest={() => void act(`retest:${finding.id}`, () => retest(finding.id))} onPropose={() => void act(`propose:${finding.id}`, () => api.propose(finding.id))} onApprove={(proposalId, decision) => void act(`approval:${finding.id}`, () => api.approve(proposalId, decision))} onExecute={proposalId => void act(`execute:${finding.id}`, () => api.execute(proposalId))} />)}</div>}
+      {loading && findings.length === 0 ? <div className="panel"><Empty title="Loading findings" copy="Checking persisted scan results." /></div> : findings.length === 0 ? <div className="panel"><Empty title="No confirmed findings" copy="Findings will appear here when a scan reproduces a security issue." /></div> : <div className="finding-list">{findings.map(finding => <FindingCard key={finding.id} mode={apiMode} finding={finding} retests={retests.filter(row => row.finding_id === finding.id)} proposal={proposals.find(row => row.finding_id === finding.id)} proposals={proposals.filter(row => row.finding_id === finding.id)} approvals={approvals} executions={executions} pending={pendingRetests.includes(finding.id) || pendingActions.some(key => key.endsWith(finding.id))} onRetest={() => void act(`retest:${finding.id}`, () => retest(finding.id))} onPropose={() => void act(`propose:${finding.id}`, () => api.propose(finding.id))} onApprove={(proposalId, decision) => void act(`approval:${finding.id}`, () => api.approve(proposalId, decision, reviewerToken))} onExecute={proposalId => void act(`execute:${finding.id}`, () => api.execute(proposalId))} />)}</div>}
     </section>
 
     <section className="section-block">
