@@ -63,7 +63,6 @@ services:
       retries: 10
 
   v1-transport:
-    profiles: [v1]
     build: {context: ., dockerfile: Dockerfile.v1}
     environment:
       VOYAGEGUARD_V1_DB: /data/voyageguard-v1.db
