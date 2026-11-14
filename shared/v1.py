@@ -389,7 +389,6 @@ class ChangeEvent(ContractModel):
     risk_score: int = Field(ge=0, le=100)
     reasons: list[str] = Field(default_factory=list)
     recommended_test_families: list[str] = Field(default_factory=list)
-)
 
 
 class RemediationProposal(ContractModel):
