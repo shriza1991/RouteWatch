@@ -169,9 +169,12 @@ class UnitOfWork:
             )
 
     def get_scan_config(self, scan_id: UUID | str) -> TargetConfig | None:
-        with self.connect() as connection:
+        connection = self.connect()
+        try:
             row = connection.execute('SELECT payload FROM scan_configs WHERE scan_id=?',
-                                     (str(scan_id),)).fetchone()
+                                      (str(scan_id),)).fetchone()
+        finally:
+            connection.close()
         return TargetConfig.model_validate_json(row['payload']) if row else None
 
     def reserve(self, operation: str, resource: str, key: str, request_fingerprint: str):
