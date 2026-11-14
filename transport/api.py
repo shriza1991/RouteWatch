@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from persistence import IdempotencyConflict, V1Store, fingerprint
+from discovery.runtime import FixtureInventoryService
 from shared.v1 import (Approval, Endpoint, ExecutionResult, Finding, RemediationProposal,
                        RequestAuditEvent, RetestResult, ScanEvent, ScanRun, TargetConfig)
 from transport.management_adapter import SandboxManagementAdapter
@@ -215,4 +216,7 @@ def create_app(*, store: V1Store, credential_resolver: CredentialResolver | None
 
 
 # Separate entrypoint. No fabricated domain or inventory service is installed.
-app = create_app(store=V1Store(os.getenv('VOYAGEGUARD_V1_DB', 'data/voyageguard-v1.db')))
+app = create_app(
+    store=V1Store(os.getenv('VOYAGEGUARD_V1_DB', 'data/voyageguard-v1.db')),
+    inventory=FixtureInventoryService(),
+)
