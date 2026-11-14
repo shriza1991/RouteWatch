@@ -11,7 +11,9 @@ export function App() {
   const [retests, setRetests] = useState<Retest[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [approvals, setApprovals] = useState<Approval[]>([]);
-  const [executions, setExecutions] = useState<Execution[]>([]);\n  const [changes, setChanges] = useState<Change[]>([]);\n  const [reviewerToken, setReviewerToken] = useState('');
+  const [executions, setExecutions] = useState<Execution[]>([]);
+  const [changes, setChanges] = useState<Change[]>([]);
+  const [reviewerToken, setReviewerToken] = useState('');
   const [base, setBase] = useState(defaultBase);
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(true);
@@ -32,7 +34,8 @@ export function App() {
     if (retestResult.status === 'fulfilled') setRetests(retestResult.value); else messages.push(`Retests: ${retestResult.reason.message}`);
     if (proposalResult.status === 'fulfilled') setProposals(proposalResult.value); else if (apiMode === 'v1') messages.push(`Proposals: ${proposalResult.reason.message}`);
     if (approvalResult.status === 'fulfilled') setApprovals(approvalResult.value); else if (apiMode === 'v1') messages.push(`Approvals: ${approvalResult.reason.message}`);
-    if (executionResult.status === 'fulfilled') setExecutions(executionResult.value); else if (apiMode === 'v1') messages.push(`Executions: ${executionResult.reason.message}`);\n    if (changeResult.status === 'fulfilled') setChanges(changeResult.value); else if (apiMode === 'v1') messages.push(`Changes: ${changeResult.reason.message}`);
+    if (executionResult.status === 'fulfilled') setExecutions(executionResult.value); else if (apiMode === 'v1') messages.push(`Executions: ${executionResult.reason.message}`);
+    if (changeResult.status === 'fulfilled') setChanges(changeResult.value); else if (apiMode === 'v1') messages.push(`Changes: ${changeResult.reason.message}`);
     if (scanResult.status === 'fulfilled' && retestResult.status === 'fulfilled') {
       const terminal = new Set(scanResult.value.filter(scan => !['running', 'queued', 'cancelling'].includes(scan.status)).map(scan => scan.id));
       const finished = Object.entries(retestScanIds).filter(([findingId, scanId]) => terminal.has(scanId) || retestResult.value.some(row => row.finding_id === findingId)).map(([findingId]) => findingId);
@@ -188,7 +191,7 @@ function FindingCard({ mode, finding, retests, proposal, proposals, approvals, e
     {mode === 'v1' ? <div className="lifecycle-actions">
       {!hasProposal && findingCanPropose && <button disabled={pending} onClick={onPropose}>Create remediation proposal</button>}
       {proposal && !approval && proposalCanBeReviewed && !confirmingDecision && <button disabled={pending} onClick={() => setConfirmingDecision(true)}>Review proposal decision</button>}
-      {proposal && !approval && proposalCanBeReviewed && confirmingDecision && <div className="approval-confirm" role="group" aria-label="Confirm remediation decision"><strong>Review: {proposal.description}</strong><p>This local API uses a server-configured demo reviewer; it does not authenticate a human reviewer.</p><div><button disabled={pending} onClick={() => { setConfirmingDecision(false); onApprove(proposal.id, 'approved'); }}>Confirm approval</button><button className="button-secondary" disabled={pending} onClick={() => { setConfirmingDecision(false); onApprove(proposal.id, 'rejected'); }}>Reject proposal</button><button className="button-quiet" disabled={pending} onClick={() => setConfirmingDecision(false)}>Cancel</button></div></div>}
+      {proposal && !approval && proposalCanBeReviewed && confirmingDecision && <div className="approval-confirm" role="group" aria-label="Confirm remediation decision"><strong>Review: {proposal.description}</strong><p>The reviewer token authorizes the server-configured local reviewer identity. This is a shared local-demo credential, not enterprise identity management.</p><div><button disabled={pending} onClick={() => { setConfirmingDecision(false); onApprove(proposal.id, 'approved'); }}>Confirm approval</button><button className="button-secondary" disabled={pending} onClick={() => { setConfirmingDecision(false); onApprove(proposal.id, 'rejected'); }}>Reject proposal</button><button className="button-quiet" disabled={pending} onClick={() => setConfirmingDecision(false)}>Cancel</button></div></div>}
       {proposal && approval?.decision === 'approved' && !execution && <button disabled={pending} onClick={() => onExecute(proposal.id)}>Execute approved action</button>}
       {proposal && approval?.decision === 'rejected' && <span className="decision-note">Rejected proposals cannot execute.</span>}
       {execution?.state === 'indeterminate' && <span className="decision-note">Execution result is indeterminate. Reconcile before another attempt.</span>}
