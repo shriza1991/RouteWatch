@@ -7,7 +7,7 @@ $env:VOYAGEGUARD_V1_DB = 'C:\Users\dyara\RouteWatch\data\voyageguard-v1.db'
 python -m uvicorn transport.api:app --host 127.0.0.1 --port 8012
 ```
 
-This starts the polling API and durable store. The same default app can run with `docker compose --profile v1 up --build -d` on host port 8012, using its own persistent volume. It has **no domain, discovery or management capability**; commands and `/v1/inventory` return `503 {"code":"capability_unavailable","message":"... capability unavailable"}`. It does not fabricate scans, findings or inventory. The legacy agent/dashboard entrypoints remain unchanged.
+This starts the polling API and durable store. The same default app can run with `docker compose --profile v1 up --build -d` on host port 8012, using its own persistent volume. The default runtime now injects a read-only `FixtureInventoryService` for the four repository-owned synthetic discovery inputs, so `GET /v1/inventory?target_id=local-sandbox` returns evidence-backed fixture inventory. It performs no network probes; the archived route remains `unknown` until positive reachability evidence is supplied. Scan, finding, proposal, approval, execution and retest commands still return an honest 503 where their domain capability is not injected. The legacy agent/dashboard entrypoints remain unchanged.
 
 ## Factory and owner interfaces
 
@@ -47,10 +47,14 @@ Each mutation reserves `(operation,resource,Idempotency-Key)` with a canonical r
 
 The reservation commits before a domain call. A crash after an external management HTTP request and before result persistence leaves `pending`; both the same key and a new key are blocked for execution. Transport cannot establish whether the action ran. Ram/Sujal must reconcile against sandbox state/idempotency before retry. Sandbox reset/manual mode changes clear its idempotency history. No exactly-once cross-service guarantee is claimed.
 
+## Discovery inventory implementation on the transformation branch
+
+`discovery.inventory` provides normalized route identity, HAR import, JavaScript route-literal extraction and evidence-aware classification. `discovery.runtime.FixtureInventoryService` loads the journey recording, reference inventory, historical traffic and archived-route candidate independently. The v1 app injects this service by default for `local-sandbox`; it never probes a host. `active` requires observed journey traffic, `shadow` means traffic absent from the reference snapshot, and `zombie` requires complete zero-traffic history plus an explicit reachable result. Missing/incomplete evidence remains `unknown`. `discovery.changes` compares normalized inventory snapshots and maps added travel routes to bounded test families; it is currently a library capability, not yet a deployment webhook or persisted change-event API.
+
 ## Remaining handoffs
 
 - **Ram:** implement the `DomainService` protocol, authoritative approval/transition/eligibility checks, scan/retest orchestration and safe credential use. The test double is not a runtime service.
-- **Akshat:** implement `InventoryService` from the separate journey, reference, historical and archived-route evidence. The transport does no classification.
+- **Akshat:** extend discovery beyond the initial synthetic inputs (real approved HAR/gateway/JS sources), add authenticated bounded reachability probes and persist snapshots/change events. The current default service is read-only fixture inventory.
 - **Vikram:** switch to these polling models only when the domain and inventory capabilities are integrated; render `503`, `pending_reconciliation` and `indeterminate` explicitly. Do not call management directly.
 - **Sujal:** inject real services, configure server-only credential references and management adapter, migrate or deliberately discard legacy runtime data, and add an authenticated reviewer mechanism before anything beyond the local demo. Compose now provides only the separate opt-in process and database; it does not supply missing domain implementations. Existing agent tables are untouched.
 
