@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from shared.v1 import (
     Approval, ExecutionResult, Finding, RemediationProposal, RequestAuditEvent,
-    RetestResult, ScanEvent, ScanRun,
+    RetestResult, ScanEvent, ScanRun, InventorySnapshot, ChangeEvent,
 )
 
 
@@ -36,7 +36,13 @@ MIGRATIONS = ((
     'CREATE INDEX idx_scan_events_parent ON scan_events(parent_id,sort_at,id)',
     'CREATE INDEX idx_findings_parent ON findings(parent_id,sort_at,id)',
     'CREATE INDEX idx_audit_parent ON audit(parent_id,sort_at,id)',
-),)
+), (
+    'CREATE TABLE inventory_snapshots (id TEXT PRIMARY KEY, parent_id TEXT NOT NULL, sort_at TEXT NOT NULL, payload TEXT NOT NULL)',
+    'CREATE TABLE change_events (id TEXT PRIMARY KEY, parent_id TEXT NOT NULL REFERENCES scans(id), sort_at TEXT NOT NULL, payload TEXT NOT NULL)',
+    'CREATE INDEX idx_inventory_snapshots_parent ON inventory_snapshots(parent_id,sort_at,id)',
+    'CREATE INDEX idx_change_events_parent ON change_events(parent_id,sort_at,id)',
+    'CREATE TABLE scan_configs (scan_id TEXT PRIMARY KEY REFERENCES scans(id), payload TEXT NOT NULL)',
+))
 
 
 def migrate(connection: sqlite3.Connection, migrations=MIGRATIONS) -> None:
@@ -90,6 +96,8 @@ SPECS = {
     'executions': (ExecutionResult, 'proposal_id', 'requested_at'),
     'retests': (RetestResult, 'finding_id', 'created_at'),
     'audit': (RequestAuditEvent, 'scan_id', 'at'),
+    'inventory_snapshots': (InventorySnapshot, 'target_id', 'captured_at'),
+    'change_events': (ChangeEvent, 'scan_id', 'at'),
 }
 
 
