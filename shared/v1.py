@@ -196,7 +196,14 @@ class Finding(ContractModel):
     scan_id: UUID
     rule_id: str = Field(min_length=1)
     title: str | None = None
-    severity: str = Field(pattern=r'^(critical|high|medium|low)
+    severity: str = Field(pattern=r'^(critical|high|medium|low)$')
+    business_impact: str = Field(min_length=1)
+    suggested_fix: str | None = None
+    endpoint: str | None = None
+    confidence: float = Field(default=0.95, ge=0, le=1)
+    minimal_proof: MinimalProof
+    state: str = Field(default='verified', pattern=r'^(open|verified|awaiting_approval|approved|remediating|retesting|resolved|unsupported|remediation_failed|retest_failed|inconclusive|cancelled)$')
+
 
 class RemediationProposal(ContractModel):
     id: UUID = Field(default_factory=uuid4)
