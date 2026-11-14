@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from shared.v1 import (
     Approval, ExecutionResult, Finding, RemediationProposal, RequestAuditEvent,
-    RetestResult, ScanEvent, ScanRun, InventorySnapshot, ChangeEvent,
+    RetestResult, ScanEvent, ScanRun, InventorySnapshot, ChangeEvent, TargetConfig,
 )
 
 
@@ -156,6 +156,23 @@ class UnitOfWork:
         self.connection = connection
         for name in SPECS:
             setattr(self, name, Repository(self, name))
+
+    def save_scan_config(self, scan_id: UUID | str, config: TargetConfig) -> None:
+        if not isinstance(config, TargetConfig):
+            raise TypeError('v1 TargetConfig is required')
+        payload = TargetConfig.model_validate_json(config.model_dump_json()).model_dump_json()
+        with self.transaction() as unit:
+            unit.connection.execute(
+                'INSERT INTO scan_configs(scan_id,payload) VALUES(?,?) '
+                'ON CONFLICT(scan_id) DO UPDATE SET payload=excluded.payload',
+                (str(scan_id), payload),
+            )
+
+    def get_scan_config(self, scan_id: UUID | str) -> TargetConfig | None:
+        with self.connect() as connection:
+            row = connection.execute('SELECT payload FROM scan_configs WHERE scan_id=?',
+                                     (str(scan_id),)).fetchone()
+        return TargetConfig.model_validate_json(row['payload']) if row else None
 
     def reserve(self, operation: str, resource: str, key: str, request_fingerprint: str):
         if not all(isinstance(x, str) and x.strip() for x in (operation, resource, key, request_fingerprint)):
