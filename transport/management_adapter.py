@@ -22,7 +22,7 @@ class ManagementConfig:
         if (parsed.scheme not in ('http', 'https') or not parsed.hostname or
                 parsed.username is not None or parsed.password is not None or
                 parsed.path not in ('', '/') or parsed.query or parsed.fragment or
-                (parsed.scheme == 'http' and parsed.hostname not in ('localhost', '127.0.0.1', '::1'))):
+                (parsed.scheme == 'http' and parsed.hostname not in ('localhost', '127.0.0.1', '::1', 'management'))):
             raise ValueError('Invalid sandbox management origin')
         try:
             parsed.port
