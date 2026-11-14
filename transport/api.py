@@ -2,18 +2,20 @@
 
 import os
 from typing import Protocol
+import secrets
 from uuid import UUID, uuid5
 
-from fastapi import FastAPI, Header, HTTPException, Query, Request
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from persistence import IdempotencyConflict, V1Store, fingerprint
 from discovery.runtime import FixtureInventoryService
+from agent.v1_domain import DemoCredentialResolver, RouteWatchDomainService
 from shared.v1 import (Approval, Endpoint, ExecutionResult, Finding, RemediationProposal,
-                       RequestAuditEvent, RetestResult, ScanEvent, ScanRun, TargetConfig)
-from transport.management_adapter import SandboxManagementAdapter
+                       RequestAuditEvent, RetestResult, ScanEvent, ScanRun, TargetConfig, ChangeEvent)
+from transport.management_adapter import ManagementConfig, SandboxManagementAdapter
 
 
 class CredentialResolver(Protocol):
@@ -22,6 +24,7 @@ class CredentialResolver(Protocol):
 
 class DomainService(Protocol):
     def start_scan(self, target: TargetConfig, credentials: CredentialResolver) -> ScanRun: ...
+    def run_scan(self, scan_id: UUID, target: TargetConfig, credentials: CredentialResolver) -> None: ...
     def cancel_scan(self, scan: ScanRun) -> ScanRun: ...
     def propose(self, finding: Finding) -> RemediationProposal: ...
     def approve(self, proposal: RemediationProposal, reviewer_id: str, decision: str) -> Approval: ...
@@ -56,7 +59,7 @@ def fail(status: int, code: str, message: str):
 def create_app(*, store: V1Store, credential_resolver: CredentialResolver | None = None,
                domain: DomainService | None = None, inventory: InventoryService | None = None,
                management_adapter: SandboxManagementAdapter | None = None,
-               reviewer_id: str = 'local-demo-reviewer') -> FastAPI:
+               reviewer_id: str = 'local-demo-reviewer', reviewer_token: str | None = None) -> FastAPI:
     if not reviewer_id.strip():
         raise ValueError('server-side demo reviewer ID is required')
     app = FastAPI(title='VoyageGuard v1 transport', docs_url=None, redoc_url=None, openapi_url=None)
@@ -117,13 +120,19 @@ def create_app(*, store: V1Store, credential_resolver: CredentialResolver | None
         return result
 
     @app.post('/v1/scans', response_model=ScanRun)
-    def start(body: ScanCreate, idempotency_key: str = Header(min_length=1)):
+    def start(body: ScanCreate, background_tasks: BackgroundTasks, idempotency_key: str = Header(min_length=1)):
         service = capability(domain, 'scan')
         resolver = capability(credential_resolver, 'credential resolver')
         if not all(resolver.has_reference(a.credential_ref) for a in body.target.accounts):
             fail(422, 'invalid_credential_reference', 'Unknown server credential reference')
-        return mutate('start_scan', body.target.id, idempotency_key, body.model_dump(mode='json'),
-                      ScanRun, lambda: service.start_scan(body.target, resolver), 'scans', 'target_id')
+        result = mutate('start_scan', body.target.id, idempotency_key, body.model_dump(mode='json'),
+                        ScanRun, lambda: service.start_scan(body.target, resolver), 'scans', 'target_id')
+        persisted = store.scans.get(result.id) or result
+        store.save_scan_config(result.id, body.target)
+        runner = getattr(service, 'run_scan', None)
+        if persisted.state == 'queued' and callable(runner):
+            background_tasks.add_task(runner, result.id, body.target, resolver)
+        return persisted
 
     @app.get('/v1/scans', response_model=list[ScanRun])
     def scans(target_id: str | None = None, limit: int = Query(100, ge=1, le=1000), offset: int = Query(0, ge=0)):
@@ -151,7 +160,15 @@ def create_app(*, store: V1Store, credential_resolver: CredentialResolver | None
     def finding(finding_id: UUID): return required(store.findings, finding_id, 'finding')
 
     @app.get('/v1/inventory', response_model=list[Endpoint])
-    def endpoints(target_id: str): return capability(inventory, 'inventory').list_endpoints(target_id)
+    def endpoints(target_id: str):
+        snapshots = store.inventory_snapshots.list(parent_id=target_id, limit=1000)
+        if snapshots:
+            return snapshots[-1].endpoints
+        return capability(inventory, 'inventory').list_endpoints(target_id)
+
+    @app.get('/v1/changes', response_model=list[ChangeEvent])
+    def changes(scan_id: UUID | None = None):
+        return store.change_events.list(parent_id=scan_id)
 
     @app.post('/v1/findings/{finding_id}/proposals', response_model=RemediationProposal)
     def propose(finding_id: UUID, idempotency_key: str = Header(min_length=1)):
@@ -164,7 +181,13 @@ def create_app(*, store: V1Store, credential_resolver: CredentialResolver | None
     def proposals(finding_id: UUID | None = None): return store.proposals.list(parent_id=finding_id)
 
     @app.post('/v1/proposals/{proposal_id}/approval', response_model=Approval)
-    def approve(proposal_id: UUID, body: ApprovalCreate, idempotency_key: str = Header(min_length=1)):
+    def approve(proposal_id: UUID, body: ApprovalCreate, idempotency_key: str = Header(min_length=1),
+                supplied_reviewer_token: str | None = Header(default=None, alias='X-Reviewer-Token')):
+        if reviewer_token is not None:
+            if not reviewer_token:
+                fail(503, 'reviewer_auth_not_configured', 'Reviewer authentication is not configured')
+            if not supplied_reviewer_token or not secrets.compare_digest(reviewer_token, supplied_reviewer_token):
+                fail(401, 'reviewer_auth_required', 'A valid reviewer token is required')
         service = capability(domain, 'approval')
         current = required(store.proposals, proposal_id, 'proposal')
         return mutate('approval', str(proposal_id), idempotency_key, body.model_dump(), Approval,
@@ -215,8 +238,20 @@ def create_app(*, store: V1Store, credential_resolver: CredentialResolver | None
     return app
 
 
-# Separate entrypoint. No fabricated domain or inventory service is installed.
+# Production-like local demo runtime. It only accepts the named synthetic sandbox.
+_default_store = V1Store(os.getenv('VOYAGEGUARD_V1_DB', 'data/voyageguard-v1.db'))
+_default_inventory = FixtureInventoryService()
+_default_domain = RouteWatchDomainService(_default_store, _default_inventory)
+_management_adapter = None
+if os.getenv('SANDBOX_MANAGEMENT_TOKEN'):
+    _management_adapter = SandboxManagementAdapter(ManagementConfig.from_env())
+
 app = create_app(
-    store=V1Store(os.getenv('VOYAGEGUARD_V1_DB', 'data/voyageguard-v1.db')),
-    inventory=FixtureInventoryService(),
+    store=_default_store,
+    credential_resolver=DemoCredentialResolver(),
+    domain=_default_domain,
+    inventory=_default_inventory,
+    management_adapter=_management_adapter,
+    reviewer_id=os.getenv('VOYAGEGUARD_REVIEWER_ID', 'local-demo-reviewer'),
+    reviewer_token=os.getenv('VOYAGEGUARD_REVIEWER_TOKEN', ''),
 )
