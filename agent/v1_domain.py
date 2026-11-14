@@ -299,7 +299,9 @@ class RouteWatchDomainService:
                         and foreign_body.get("booking_id") == booking_b["booking_id"]
                         and foreign_body.get("agency_id") == b.agency_id):
                     findings.append(Finding(
-                        scan_id=scan_id, rule_id="cross_agency_access", severity="high",
+                        scan_id=scan_id, rule_id="cross_agency_access", title="Cross-agency booking access", severity="high",
+                        suggested_fix="Enforce agency ownership on every booking read and related object operation.",
+                        endpoint=read_path, confidence=0.99,
                         business_impact="One travel agency can read another agency's booking and traveller information.",
                         minimal_proof=MinimalProof(
                             request={"method": "GET", "path": foreign_path, "account": a.agency_id},
@@ -331,7 +333,9 @@ class RouteWatchDomainService:
                 if (tamper_status < 300 and fare_booking_id and persisted_fare == tampered_fare
                         and persisted_fare != quote_a["fare"]):
                     findings.append(Finding(
-                        scan_id=scan_id, rule_id="fare_tampering", severity="high",
+                        scan_id=scan_id, rule_id="fare_tampering", title="Client-controlled fare persisted",
+                        suggested_fix="Calculate payable amounts server-side from a valid quote and ignore client-submitted totals.",
+                        endpoint=booking_path, confidence=0.99, severity="high",
                         business_impact="A synthetic booking can persist a client-modified fare instead of the server quote.",
                         minimal_proof=MinimalProof(
                             request={"method": "POST", "path": booking_path,
