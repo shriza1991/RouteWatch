@@ -6,7 +6,7 @@ import { approvalFixture, endpointFixture, executionFixture, findingFixture, pro
 const mocks = vi.hoisted(() => ({
   mode: 'legacy' as 'legacy' | 'v1',
   api: {
-    scans: vi.fn(), scanEvents: vi.fn(), findings: vi.fn(), inventory: vi.fn(), audit: vi.fn(), retests: vi.fn(),
+    scans: vi.fn(), scanEvents: vi.fn(), findings: vi.fn(), inventory: vi.fn(), audit: vi.fn(), changes: vi.fn(), retests: vi.fn(),
     proposals: vi.fn(), approvals: vi.fn(), executions: vi.fn(), startScan: vi.fn(), cancel: vi.fn(),
     propose: vi.fn(), approve: vi.fn(), execute: vi.fn(), retest: vi.fn(),
   },
@@ -25,7 +25,7 @@ describe('dashboard operational states', () => {
     Object.values(mocks.api).forEach(mock => mock.mockReset());
     mocks.api.scans.mockResolvedValue([]); mocks.api.scanEvents.mockResolvedValue([]);
     mocks.api.findings.mockResolvedValue([]); mocks.api.inventory.mockResolvedValue([]);
-    mocks.api.audit.mockResolvedValue([]); mocks.api.retests.mockResolvedValue([]);
+    mocks.api.audit.mockResolvedValue([]); mocks.api.changes.mockResolvedValue([]); mocks.api.retests.mockResolvedValue([]);
     mocks.api.proposals.mockResolvedValue([]); mocks.api.approvals.mockResolvedValue([]); mocks.api.executions.mockResolvedValue([]);
     mocks.api.cancel.mockResolvedValue({}); mocks.api.retest.mockResolvedValue({ finding_id: findingFixture.id, retest_scan_id: 'scan-retest' });
   });
