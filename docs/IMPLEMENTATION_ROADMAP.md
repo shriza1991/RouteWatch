@@ -23,4 +23,6 @@ The default scanner refuses non-sandbox targets. All attack scenarios use reposi
 
 ## Verification
 
+The first CI attempts exposed schema and store-method integration defects; these were corrected on the feature branch. The dashboard test/build and Compose validation have passed on the current integration sequence; the Python suite is being rerun after the SQLite scan-configuration wrapper fix. Do not merge until the latest Python job is green.
+
 The branch adds deterministic domain tests for cross-agency access, persisted fare tampering, retest resolution, scope rejection and kill-switch behavior, plus existing discovery tests. Run the full suite and dashboard build in GitHub Actions before treating the branch as ready. No current test result should be inferred from historical results in `docs/INTEGRATION_STATUS.md`.
