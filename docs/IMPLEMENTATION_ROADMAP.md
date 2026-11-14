@@ -2,34 +2,25 @@
 
 Branch: `feat/routewatch-complete-transformation`
 
-## Baseline (verified against main at 6b43abf)
+## Verified baseline
 
-- Legacy FastAPI agent, synthetic travel sandbox and dashboard remain the working default demo.
-- V1 contracts and SQLite persistence exist as a separate runtime.
-- `transport.api` exposes typed polling and approval/execution lifecycle routes, but its default factory injects no domain, credential resolver, inventory or management adapter.
-- The management adapter is implemented but not connected to a live v1 domain service.
-- Historical discovery inputs are explicitly synthetic and supplied independently: journey recording, reference inventory, historical traffic and archived-route candidate.
-- The dashboard supports legacy and v1 adapters, but Compose defaults to legacy mode.
-- Historical integration evidence reports 94 tests and two container smoke runs on 2026-11-09; these are historical results, not tests run during this transformation.
+The transformation started from `main` commit `6b43abf68aa904b87a5beb2471cb5aa73483abf6`. The branch retains the legacy agent and sandbox while integrating the newer v1 transport, SQLite store, fixture-backed discovery and React dashboard.
 
 ## Ordered implementation status
 
-| Phase | Scope | Status |
-|---|---|---|
-| 1 | Runtime and persistence unification | In progress — v1 store/transport retained; full legacy/domain orchestration wiring remains |
-| 2 | Discovery and inventory | Partial — normalized route, HAR and JS route-literal extraction, fixture-backed v1 inventory, source evidence and conservative classification implemented; authenticated reachability probes and external capture ingestion pending |
-| 3 | Change-aware planning | Partial — deterministic snapshot comparison and travel-specific test-family prioritization implemented as a library; persisted baselines, deployment webhook/CI integration and scan-trigger wiring pending |
-| 4 | Travel business logic | Pending — existing ownership and fare rules preserved; additional refund/cancellation/role tests pending |
-| 5 | Execution safety and independent verification | Partial — existing SafeExecutor and management adapter preserved; end-to-end v1 verification wiring pending |
-| 6 | Dashboard and demo | Partial — existing dashboard remains intact; v1 inventory integration and browser/E2E verification pending |
+| Priority | Workstream | Current implementation | Remaining work |
+|---|---|---|---|
+| 1 | Runtime and persistence | Default Compose stack starts v1 API; real bounded domain service is injected; separate v1 SQLite store, scan lifecycle, findings, events, audit, proposals, approvals, executions and retests are wired. | Legacy data migration is not implemented; v1 and legacy remain parallel runtimes. Add restart/reconciliation E2E coverage. |
+| 2 | Discovery and inventory | Normalized endpoint identity, HAR parser, JS route-literal extraction, synthetic journey/reference/history/archive inputs, source evidence, active/shadow/zombie/unknown classification, latest snapshot persistence. | General browser crawling, gateway/CI logs, live source ingestion, parameter/role inference and production-grade reachability probes. |
+| 3 | Change-aware planning | Deterministic snapshot comparison, risk scoring and travel test-family recommendations; changes persist and appear in dashboard. | Deployment webhooks, JS bundle diff integration, changed-route targeted test dispatch. Current scan still runs its fixed two-rule suite. |
+| 4 | Travel business logic | Cross-agency booking IDOR and fare tampering with synthetic controls and persisted-state proof. | Duplicate refund, unauthorized cancellation, payment bypass, coupon reuse, role escalation, mass assignment, supplier boundary and excessive data exposure. |
+| 5 | Execution safety and verification | Local-sandbox-only allowlist, GET/POST restriction, request/rate budgets, timeouts, response cap, redirects disabled, kill switch, audit events, server-side management adapter, reviewer shared-secret gate, independent supported retests. | DNS pinning/rebinding defenses, richer per-host concurrency controls, authenticated identity/SSO, comprehensive test catalogue, broader adversarial safety tests. |
+| 6 | Dashboard and demo | Dashboard defaults to v1 in Compose; scans/findings/inventory/changes/audit/proposals/approvals/executions/retests are connected; reviewer token is in-memory only. | Browser E2E, richer status/filters and full workflow acceptance test in real Compose. |
 
-## Safety boundaries
+## Non-negotiable scope
 
-- New inventory code consumes repository-owned synthetic fixtures only.
-- It performs no network probes and does not classify an archived route as zombie without explicit positive reachability plus complete zero-traffic history.
-- No production target, customer data, or real financial action is used.
-- Existing management credentials remain server-side.
+The default scanner refuses non-sandbox targets. All attack scenarios use repository-owned synthetic data and the two synthetic agencies. Do not add real targets or customer data to tests. The v1 reviewer token is only a local demonstration credential; it is not a production identity solution.
 
-## Verification limitations
+## Verification
 
-The current execution environment cannot resolve `github.com` from the shell, so local pytest, frontend build, Docker and container smoke tests cannot be run here. The new discovery tests are committed for execution in CI or a developer checkout. Do not treat the historical 94-test result as current verification.
+The branch adds deterministic domain tests for cross-agency access, persisted fare tampering, retest resolution, scope rejection and kill-switch behavior, plus existing discovery tests. Run the full suite and dashboard build in GitHub Actions before treating the branch as ready. No current test result should be inferred from historical results in `docs/INTEGRATION_STATUS.md`.
