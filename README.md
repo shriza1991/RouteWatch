@@ -38,7 +38,7 @@ docker compose --profile v1 up --build -d
 Invoke-RestMethod http://localhost:8012/v1/scans
 ```
 
-It uses its own `/data/voyageguard-v1.db` volume. Empty scan polling works; commands and inventory requiring absent Ram/Akshat services return an honest 503. It is not connected to the dashboard, legacy agent or sandbox management adapter. See [v1 transport](docs/TRANSPORT.md).
+It uses its own `/data/voyageguard-v1.db` volume. The v1 inventory endpoint is now backed by the repository's four independent synthetic discovery fixtures for `target_id=local-sandbox`; it does not probe the network and leaves zombie candidates unclassified until reachability is established. Scan and remediation lifecycle commands still require domain services and return an honest 503 until those services are wired. The default dashboard and legacy agent are unchanged. See [v1 transport](docs/TRANSPORT.md) and the [transformation roadmap](docs/IMPLEMENTATION_ROADMAP.md).
 
 ## Demo and reset
 
