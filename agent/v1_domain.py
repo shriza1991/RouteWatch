@@ -76,9 +76,11 @@ def _safe_json(response: httpx.Response) -> Any:
 class RouteWatchDomainService:
     """Synchronous bounded runner used by FastAPI's background-task interface."""
 
-    def __init__(self, store: V1Store, inventory: FixtureInventoryService):
+    def __init__(self, store: V1Store, inventory: FixtureInventoryService,
+                 transport: httpx.BaseTransport | None = None):
         self.store = store
         self.inventory = inventory
+        self.transport = transport
 
     def _validate_target(self, target: TargetConfig) -> tuple[str, str, int]:
         if target.id != "local-sandbox":
@@ -221,6 +223,7 @@ class RouteWatchDomainService:
             follow_redirects=False,
             limits=httpx.Limits(max_connections=2, max_keepalive_connections=1),
             trust_env=False,
+            transport=self.transport,
         )
 
     def _must_object(self, status: int, data: Any, description: str) -> dict[str, Any]:
