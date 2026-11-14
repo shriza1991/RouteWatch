@@ -154,7 +154,12 @@ class RouteWatchDomainService:
         if len(budget["recent"]) >= budget["rate"]:
             raise ScanStopped("Per-minute request limit reached")
         url = str(target.base_url).rstrip("/") + path
-        if _origin(url) != _origin(str(target.base_url)):
+        parsed_url = urlsplit(url)
+        try:
+            request_origin = (parsed_url.scheme, parsed_url.hostname.lower(), parsed_url.port or 80)
+        except (AttributeError, ValueError):
+            raise ScopeViolation("Invalid request origin") from None
+        if request_origin != _origin(str(target.base_url)):
             raise ScopeViolation("Request escaped the configured origin")
         headers: dict[str, str] = {"Accept": "application/json"}
         if account is not None:
@@ -178,10 +183,13 @@ class RouteWatchDomainService:
                     chunks.append(chunk)
                 if outcome != "response_size_limit":
                     raw = b"".join(chunks)
-                    try:
-                        data = response.json() if not raw else __import__("json").loads(raw)
-                    except (ValueError, UnicodeDecodeError):
-                        data = {"text": raw[:500].decode("utf-8", errors="replace")}
+                    if not raw:
+                        data = {}
+                    else:
+                        try:
+                            data = __import__("json").loads(raw)
+                        except (ValueError, UnicodeDecodeError):
+                            data = {"text": raw[:500].decode("utf-8", errors="replace")}
                     outcome = "redirect_rejected" if 300 <= status < 400 else "completed"
         except httpx.RequestError:
             outcome = "transport_error"
