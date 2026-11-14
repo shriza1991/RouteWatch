@@ -271,3 +271,24 @@ def map_sandbox_execution(proposal: RemediationProposal, response: dict[str, Any
         requested_at=response.get('requested_at', received_at or utc_now()),
         detail=response.get('detail'),
     )
+
+
+class InventorySnapshot(ContractModel):
+    id: UUID = Field(default_factory=uuid4)
+    target_id: str = Field(min_length=1)
+    captured_at: AwareDatetime = Field(default_factory=utc_now)
+    endpoints: list[Endpoint] = Field(default_factory=list)
+    synthetic: bool = True
+
+
+class ChangeEvent(ContractModel):
+    id: UUID = Field(default_factory=uuid4)
+    scan_id: UUID
+    target_id: str = Field(min_length=1)
+    at: AwareDatetime = Field(default_factory=utc_now)
+    method: str = Field(pattern=r'^(GET|POST|PUT|PATCH|DELETE)$')
+    normalized_path: str = Field(pattern=r'^/')
+    change: str = Field(pattern=r'^(added|removed|metadata_changed)$')
+    risk_score: int = Field(ge=0, le=100)
+    reasons: list[str] = Field(default_factory=list)
+    recommended_test_families: list[str] = Field(default_factory=list)
