@@ -48,9 +48,14 @@ services:
     environment:
       VITE_AGENT_URL: http://localhost:${ROUTEWATCH_AGENT_PORT:-8001}
       VITE_SANDBOX_URL: http://sandbox:8000
+      VITE_DASHBOARD_API_MODE: v1
+      VITE_V1_PROXY_TARGET: http://v1-transport:8012
+      VITE_AGENCY_A_CREDENTIAL_REF: server:agency-a
+      VITE_AGENCY_B_CREDENTIAL_REF: server:agency-b
     networks: [edge]
     depends_on:
       agent: {condition: service_healthy}
+      v1-transport: {condition: service_healthy}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5173').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 5s
@@ -58,13 +63,20 @@ services:
       retries: 10
 
   v1-transport:
-    profiles: [v1]
     build: {context: ., dockerfile: Dockerfile.v1}
     environment:
       VOYAGEGUARD_V1_DB: /data/voyageguard-v1.db
+      SANDBOX_MANAGEMENT_URL: http://management:8002
+      SANDBOX_MANAGEMENT_TOKEN: ${SANDBOX_MANAGEMENT_TOKEN:?Set SANDBOX_MANAGEMENT_TOKEN before starting Compose}
+      VOYAGEGUARD_REVIEWER_TOKEN: ${VOYAGEGUARD_REVIEWER_TOKEN:?Set VOYAGEGUARD_REVIEWER_TOKEN before starting Compose}
+      VOYAGEGUARD_REVIEWER_ID: local-demo-reviewer
+      ROUTEWATCH_ALLOWED_SANDBOX_HOSTS: sandbox,localhost,127.0.0.1
     ports: ["${ROUTEWATCH_V1_PORT:-8012}:8012"]
     volumes: ["v1-data:/data"]
-    networks: [edge]
+    networks: [edge, travel, management-private]
+    depends_on:
+      sandbox: {condition: service_healthy}
+      management: {condition: service_healthy}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8012/v1/scans', timeout=2)"]
       interval: 5s

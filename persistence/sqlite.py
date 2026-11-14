@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from shared.v1 import (
     Approval, ExecutionResult, Finding, RemediationProposal, RequestAuditEvent,
-    RetestResult, ScanEvent, ScanRun,
+    RetestResult, ScanEvent, ScanRun, InventorySnapshot, ChangeEvent, TargetConfig,
 )
 
 
@@ -36,7 +36,13 @@ MIGRATIONS = ((
     'CREATE INDEX idx_scan_events_parent ON scan_events(parent_id,sort_at,id)',
     'CREATE INDEX idx_findings_parent ON findings(parent_id,sort_at,id)',
     'CREATE INDEX idx_audit_parent ON audit(parent_id,sort_at,id)',
-),)
+), (
+    'CREATE TABLE inventory_snapshots (id TEXT PRIMARY KEY, parent_id TEXT NOT NULL, sort_at TEXT NOT NULL, payload TEXT NOT NULL)',
+    'CREATE TABLE change_events (id TEXT PRIMARY KEY, parent_id TEXT NOT NULL REFERENCES scans(id), sort_at TEXT NOT NULL, payload TEXT NOT NULL)',
+    'CREATE INDEX idx_inventory_snapshots_parent ON inventory_snapshots(parent_id,sort_at,id)',
+    'CREATE INDEX idx_change_events_parent ON change_events(parent_id,sort_at,id)',
+    'CREATE TABLE scan_configs (scan_id TEXT PRIMARY KEY REFERENCES scans(id), payload TEXT NOT NULL)',
+))
 
 
 def migrate(connection: sqlite3.Connection, migrations=MIGRATIONS) -> None:
@@ -90,6 +96,8 @@ SPECS = {
     'executions': (ExecutionResult, 'proposal_id', 'requested_at'),
     'retests': (RetestResult, 'finding_id', 'created_at'),
     'audit': (RequestAuditEvent, 'scan_id', 'at'),
+    'inventory_snapshots': (InventorySnapshot, 'target_id', 'captured_at'),
+    'change_events': (ChangeEvent, 'scan_id', 'at'),
 }
 
 
@@ -148,6 +156,22 @@ class UnitOfWork:
         self.connection = connection
         for name in SPECS:
             setattr(self, name, Repository(self, name))
+
+    def save_scan_config(self, scan_id: UUID | str, config: TargetConfig) -> None:
+        if not isinstance(config, TargetConfig):
+            raise TypeError('v1 TargetConfig is required')
+        payload = TargetConfig.model_validate_json(config.model_dump_json()).model_dump_json()
+        self.connection.execute(
+            'INSERT INTO scan_configs(scan_id,payload) VALUES(?,?) '
+            'ON CONFLICT(scan_id) DO UPDATE SET payload=excluded.payload',
+            (str(scan_id), payload),
+        )
+
+    def get_scan_config(self, scan_id: UUID | str) -> TargetConfig | None:
+        row = self.connection.execute(
+            'SELECT payload FROM scan_configs WHERE scan_id=?', (str(scan_id),)
+        ).fetchone()
+        return TargetConfig.model_validate_json(row['payload']) if row else None
 
     def reserve(self, operation: str, resource: str, key: str, request_fingerprint: str):
         if not all(isinstance(x, str) and x.strip() for x in (operation, resource, key, request_fingerprint)):
@@ -209,6 +233,20 @@ class V1Store:
             raise
         finally:
             connection.close()
+
+    def save_scan_config(self, scan_id: UUID | str, config: TargetConfig) -> None:
+        with self.transaction() as unit:
+            unit.save_scan_config(scan_id, config)
+
+    def get_scan_config(self, scan_id: UUID | str) -> TargetConfig | None:
+        connection = self.connect()
+        try:
+            row = connection.execute(
+                'SELECT payload FROM scan_configs WHERE scan_id=?', (str(scan_id),)
+            ).fetchone()
+        finally:
+            connection.close()
+        return TargetConfig.model_validate_json(row['payload']) if row else None
 
     def reserve(self, operation: str, resource: str, key: str, request_fingerprint: str):
         with self.transaction() as unit:

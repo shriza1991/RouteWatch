@@ -178,3 +178,22 @@ def test_secret_config_not_returned_or_persisted(tmp_path):
         assert response.status_code == 422
         assert 'very-private' not in response.text
         assert 'very-private' not in store.path.read_bytes().decode('latin1')
+
+
+def test_fixture_inventory_service_is_injected_and_returns_evidence(tmp_path):
+    from discovery.runtime import FixtureInventoryService
+    from pathlib import Path
+
+    fixtures = Path(__file__).resolve().parents[2] / 'sandbox' / 'fixtures'
+    store = V1Store(tmp_path / 'inventory.db')
+    app = create_app(store=store, inventory=FixtureInventoryService(fixtures))
+    with TestClient(app) as client:
+        response = client.get('/v1/inventory?target_id=local-sandbox')
+        assert response.status_code == 200
+        endpoints = response.json()
+        by_path = {item['normalized_path']: item for item in endpoints}
+        assert 'active' in by_path['/api/v2/quotes']['labels']
+        assert set(by_path['/api/ui/preferences']['labels']) == {'active', 'shadow'}
+        assert by_path['/api/v1/bookings/{id}']['labels'] == ['unknown']
+        assert by_path['/api/v1/bookings/{id}']['reachability'] == 'unprobed'
+        assert all(evidence['synthetic'] for item in endpoints for evidence in item['evidence'])

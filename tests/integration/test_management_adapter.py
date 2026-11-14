@@ -119,7 +119,7 @@ def test_mismatched_action_response_and_timeout():
     assert TOKEN not in result.model_dump_json()
 
 
-@pytest.mark.parametrize('origin', ['http://example.com', 'ftp://localhost:8002',
+@pytest.mark.parametrize('origin', ['http://example.com', 'https://evil.example:8002', 'http://management:8003', 'ftp://localhost:8002',
                                     'http://user:pass@localhost:8002',
                                     'http://localhost:8002/management',
                                     'http://localhost:8002?x=1', 'http://localhost:8002#frag',

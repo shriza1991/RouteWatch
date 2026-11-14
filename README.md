@@ -1,22 +1,26 @@
 # RouteWatch — local VoyageGuard prototype
 
-The **working legacy demo** runs a synthetic travel sandbox, a rule-driven security agent and a React dashboard. A separate authenticated management service lets an operator reset the sandbox or enable three predefined controls. The opt-in **v1 transport** has durable polling contracts but no live domain or inventory implementation yet.
+The integrated local demo runs a synthetic travel sandbox, the v1 FastAPI transport/domain service, fixture-backed discovery, a durable SQLite store and a React dashboard. A separate authenticated management service lets an operator reset the sandbox or enable three predefined controls. The legacy agent remains available on port 8001 for comparison; the dashboard uses v1 by default.
 
 ## Docker startup
 
 Set your own private management token in PowerShell (or an untracked `.env`). The following works in Windows PowerShell as well as PowerShell 7. Compose refuses a missing or blank value. Do not put it in `VITE_*` configuration.
 
 ```powershell
-$bytes = New-Object byte[] 32
-$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-$rng.GetBytes($bytes)
-$rng.Dispose()
-$env:SANDBOX_MANAGEMENT_TOKEN = [BitConverter]::ToString($bytes).Replace('-', '')
+function New-RouteWatchSecret {
+  $bytes = New-Object byte[] 32
+  $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+  $rng.GetBytes($bytes)
+  $rng.Dispose()
+  return [Convert]::ToBase64String($bytes)
+}
+$env:SANDBOX_MANAGEMENT_TOKEN = New-RouteWatchSecret
+$env:VOYAGEGUARD_REVIEWER_TOKEN = New-RouteWatchSecret
 docker compose up --build -d
 docker compose ps
 ```
 
-Open <http://localhost:5173>. Travel status is at <http://localhost:8000/sandbox/status>; the legacy agent is at <http://localhost:8001/scans>. Compose sets the dashboard's target origin to `http://sandbox:8000`, which the agent container can reach. The browser sends this origin to the agent; it does not make direct travel API calls. Management listens on port 8002 **inside its own container only**, with no published host port.
+Open <http://localhost:5173>. Travel status is at <http://localhost:8000/sandbox/status>; the legacy agent is at <http://localhost:8001/scans>. Compose sets the dashboard's target origin to `http://sandbox:8000`, which the agent container can reach. The browser sends this origin to the agent; it does not make direct travel API calls. Management listens on port 8002 **inside its own container only**, with no published host port. The v1 transport joins the isolated management network so only the server-side runtime can invoke predefined controls. The dashboard now uses the v1 API by default; reviewer approval requires the private `VOYAGEGUARD_REVIEWER_TOKEN` supplied interactively in the dashboard and checked by the server. The reviewer token is held only in the page's in-memory state and is never part of a Vite environment variable.
 
 Management shares `/data/sandbox.db` with travel. It binds `0.0.0.0` inside its container so `docker compose exec` can use its local loopback socket; native startup binds `127.0.0.1`. Its private Compose network has no dashboard or agent membership. This is not complete isolation from privileged containers or host administrators.
 
@@ -31,14 +35,7 @@ docker compose exec -T management python scripts/management_request.py action di
 docker compose exec -T management python scripts/management_request.py mode fixed
 ```
 
-Start the incomplete v1 polling API only when needed:
-
-```powershell
-docker compose --profile v1 up --build -d
-Invoke-RestMethod http://localhost:8012/v1/scans
-```
-
-It uses its own `/data/voyageguard-v1.db` volume. Empty scan polling works; commands and inventory requiring absent Ram/Akshat services return an honest 503. It is not connected to the dashboard, legacy agent or sandbox management adapter. See [v1 transport](docs/TRANSPORT.md).
+The default stack starts the v1 API on port 8012 with its own `/data/voyageguard-v1.db` volume. The v1 runtime discovers from the four supplied synthetic fixtures, performs bounded ownership and fare checks against the local sandbox, persists evidence and change events, and supports approval-gated predefined remediation followed by independent retesting. The legacy agent remains available on port 8001 for comparison, but the dashboard defaults to v1. See [v1 transport](docs/TRANSPORT.md), the [demo guide](docs/DEMO.md) and the [transformation roadmap](docs/IMPLEMENTATION_ROADMAP.md).
 
 ## Demo and reset
 
@@ -82,8 +79,9 @@ For native operator calls, set the same token privately in the operator shell an
 ```powershell
 python -m pytest -q
 docker compose config -q
+cd dashboard; npm test; npm run build
 ```
 
-The legacy agent has its own SQLite schema and rule-driven scan. V1 persistence, approval policy, eligibility and retest outcomes are separate and not wired into it. See [DEMO.md](DEMO.md), [TEAM.md](TEAM.md) and [ownership](docs/OWNERSHIP.md).
+The v1 store is separate from the legacy agent database; no automatic legacy-data migration is performed. The v1 scan currently covers synthetic cross-agency booking access and persisted fare tampering, while change intelligence compares inventory snapshots rather than receiving live deployment webhooks. Broader travel business-logic coverage and production identity controls remain future work. See [v1 transport](docs/TRANSPORT.md), [demo acceptance](docs/DEMO.md), [team](TEAM.md) and [ownership](docs/OWNERSHIP.md).
 
-For a repeatable real-container check, run `python scripts/container_smoke.py` from a PowerShell session with an operator-supplied management token. It creates an isolated Compose project on unused host ports, performs authenticated reset and HTTP assertions, then stops its containers while retaining its new volumes. See the [verified integration status](docs/INTEGRATION_STATUS.md) for results and remaining owner handoffs.
+For a repeatable real-container check, run `python scripts/container_smoke.py` from a PowerShell session with an operator-supplied management token. It creates an isolated Compose project on unused host ports, performs authenticated reset and HTTP assertions, then stops its containers while retaining its new volumes. See [implementation roadmap](docs/IMPLEMENTATION_ROADMAP.md) for current scope and [historical integration status](docs/INTEGRATION_STATUS.md) for evidence from the earlier legacy-runtime revision; those historical test counts are not current branch verification.
