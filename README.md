@@ -1,6 +1,6 @@
 # RouteWatch — local VoyageGuard prototype
 
-The **working legacy demo** runs a synthetic travel sandbox, a rule-driven security agent and a React dashboard. A separate authenticated management service lets an operator reset the sandbox or enable three predefined controls. The opt-in **v1 transport** has durable polling contracts but no live domain or inventory implementation yet.
+The integrated local demo runs a synthetic travel sandbox, the v1 FastAPI transport/domain service, fixture-backed discovery, a durable SQLite store and a React dashboard. A separate authenticated management service lets an operator reset the sandbox or enable three predefined controls. The legacy agent remains available on port 8001 for comparison; the dashboard uses v1 by default.
 
 ## Docker startup
 
@@ -82,6 +82,6 @@ docker compose config -q
 cd dashboard; npm test; npm run build
 ```
 
-The legacy agent has its own SQLite schema and rule-driven scan. V1 persistence, approval policy, eligibility and retest outcomes are separate and not wired into it. See [DEMO.md](DEMO.md), [TEAM.md](TEAM.md) and [ownership](docs/OWNERSHIP.md).
+The v1 store is separate from the legacy agent database; no automatic legacy-data migration is performed. The v1 scan currently covers synthetic cross-agency booking access and persisted fare tampering, while change intelligence compares inventory snapshots rather than receiving live deployment webhooks. Broader travel business-logic coverage and production identity controls remain future work. See [v1 transport](docs/TRANSPORT.md), [demo acceptance](docs/DEMO.md), [team](TEAM.md) and [ownership](docs/OWNERSHIP.md).
 
-For a repeatable real-container check, run `python scripts/container_smoke.py` from a PowerShell session with an operator-supplied management token. It creates an isolated Compose project on unused host ports, performs authenticated reset and HTTP assertions, then stops its containers while retaining its new volumes. See the [verified integration status](docs/INTEGRATION_STATUS.md) for results and remaining owner handoffs.
+For a repeatable real-container check, run `python scripts/container_smoke.py` from a PowerShell session with an operator-supplied management token. It creates an isolated Compose project on unused host ports, performs authenticated reset and HTTP assertions, then stops its containers while retaining its new volumes. See [implementation roadmap](docs/IMPLEMENTATION_ROADMAP.md) for current scope and [historical integration status](docs/INTEGRATION_STATUS.md) for evidence from the earlier legacy-runtime revision; those historical test counts are not current branch verification.
